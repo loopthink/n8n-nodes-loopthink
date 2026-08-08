@@ -7,6 +7,7 @@ import type {
 } from 'n8n-workflow';
 
 import { applyMasking, rulesForScope, type MaskingRule } from './masking';
+import { MissingSecretError, secretsFromCredential, substituteSecrets } from './secrets';
 
 /**
  * loopthink Runner — executes MCP tool calls inside your own network.
@@ -105,17 +106,12 @@ export class LoopthinkRunner implements INodeType {
 		const secret = String(credentials.secret);
 		const base = `${apiUrl}/group/${workspaceId}/${groupId}/runner`;
 
-		// Target auth is optional: a group may point at an API that needs none.
-		let targetHeaders: Record<string, string> = {};
+		// Optional: a group may point at an API that needs no secret at all.
+		let secrets: Record<string, string> = {};
 		try {
-			const target = await this.getCredentials('loopthinkTargetApi');
-			if (target?.authType === 'bearer' && target.token) {
-				targetHeaders = { Authorization: `Bearer ${String(target.token)}` };
-			} else if (target?.authType === 'header' && target.headerName && target.headerValue) {
-				targetHeaders = { [String(target.headerName)]: String(target.headerValue) };
-			}
+			secrets = secretsFromCredential(await this.getCredentials('loopthinkTargetApi'));
 		} catch {
-			// Not configured — fine.
+			// Not configured — a request carrying no placeholder still works.
 		}
 
 		let stopped = false;
@@ -152,11 +148,15 @@ export class LoopthinkRunner implements INodeType {
 
 		const execute = async (job: QueuedRequest): Promise<IDataObject> => {
 			try {
+				// Placeholders are filled in here and nowhere else. `resolved` must
+				// never be logged or emitted — it holds the actual secrets.
+				const resolved = substituteSecrets(job.request, secrets);
+
 				const response = await this.helpers.httpRequest({
-					method: (job.request.method || 'GET') as any,
-					url: job.request.url,
-					headers: { ...(job.request.headers || {}), ...targetHeaders },
-					body: job.request.body ?? undefined,
+					method: (resolved.method || 'GET') as any,
+					url: resolved.url,
+					headers: resolved.headers || {},
+					body: resolved.body ?? undefined,
 					json: true,
 					timeout: requestTimeout,
 					returnFullResponse: true,
@@ -168,6 +168,11 @@ export class LoopthinkRunner implements INodeType {
 				const masked = applyMasking(response.body, rulesForScope(job.masking || [], job.scope));
 				return { status: response.statusCode, data: masked };
 			} catch (error) {
+				// A missing secret is an operator problem, not a transient one — the
+				// message names which, so it can be fixed without guesswork.
+				if (error instanceof MissingSecretError) {
+					this.logger.warn(`loopthink Runner: ${error.message}`);
+				}
 				// Report the failure rather than swallowing it: the caller in the
 				// cloud is blocking on an answer and would otherwise wait out the
 				// full timeout for something that already failed.
@@ -190,6 +195,9 @@ export class LoopthinkRunner implements INodeType {
 									requestId: job.requestId,
 									tool: job.tool,
 									method: job.request.method,
+									// The queued form, with placeholders unresolved — the
+									// substituted URL can hold a secret, and this lands in
+									// n8n's execution records.
 									url: job.request.url,
 									status: result.status ?? null,
 									error: result.error ?? null,

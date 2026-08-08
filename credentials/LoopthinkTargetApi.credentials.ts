@@ -1,54 +1,56 @@
 import type { ICredentialType, INodeProperties } from 'n8n-workflow';
 
 /**
- * Authentication for the internal API the runner calls.
+ * Secrets for the internal systems this runner calls.
  *
- * Kept separate from the runner credential, and kept here rather than in
- * loopthink, on purpose: the whole point of a self-hosted runner is that the
- * credentials for your own systems never leave your network. loopthink sends the
- * request to make — method, URL, masking rules — but never the key to make it with.
+ * These stay here, in your n8n, and are never sent to loopthink. In loopthink you
+ * configure the *shape* of a request — which header, which URL — and write
+ * `{{secret.NAME}}` where the value belongs. The runner fills those in on the way
+ * out. loopthink sends the request to make, never the key to make it with.
+ *
+ * A name/value list rather than one JSON field: n8n gives it a real form, and a
+ * missing comma cannot take down every call at once.
  */
 export class LoopthinkTargetApi implements ICredentialType {
 	name = 'loopthinkTargetApi';
 
-	displayName = 'loopthink Target API (internal system)';
+	displayName = 'loopthink Target Secrets';
 
 	documentationUrl = 'https://www.loopthink.ai';
 
 	properties: INodeProperties[] = [
 		{
-			displayName: 'Authentication',
-			name: 'authType',
-			type: 'options',
+			displayName: 'Secrets',
+			name: 'secrets',
+			placeholder: 'Add secret',
+			type: 'fixedCollection',
+			typeOptions: { multipleValues: true },
+			default: {},
+			description:
+				'Each entry matches a {{secret.NAME}} placeholder configured in loopthink. A call whose placeholder is missing here is refused rather than sent — an unresolved placeholder would otherwise reach the target system and end up in its logs.',
 			options: [
-				{ name: 'None', value: 'none' },
-				{ name: 'Bearer Token', value: 'bearer' },
-				{ name: 'Header', value: 'header' },
+				{
+					name: 'secret',
+					displayName: 'Secret',
+					values: [
+						{
+							displayName: 'Name',
+							name: 'name',
+							type: 'string',
+							default: '',
+							placeholder: 'CRM_API_KEY',
+							description: 'The NAME in {{secret.NAME}}, exactly as written in loopthink',
+						},
+						{
+							displayName: 'Value',
+							name: 'value',
+							type: 'string',
+							typeOptions: { password: true },
+							default: '',
+						},
+					],
+				},
 			],
-			default: 'none',
-		},
-		{
-			displayName: 'Token',
-			name: 'token',
-			type: 'string',
-			typeOptions: { password: true },
-			default: '',
-			displayOptions: { show: { authType: ['bearer'] } },
-		},
-		{
-			displayName: 'Header Name',
-			name: 'headerName',
-			type: 'string',
-			default: 'X-API-Key',
-			displayOptions: { show: { authType: ['header'] } },
-		},
-		{
-			displayName: 'Header Value',
-			name: 'headerValue',
-			type: 'string',
-			typeOptions: { password: true },
-			default: '',
-			displayOptions: { show: { authType: ['header'] } },
 		},
 	];
 }

@@ -35,11 +35,30 @@ That last step matters: while you are only running *Test workflow* in the editor
 the node listens for a short window and then stops. It polls continuously only
 once the workflow is active.
 
-### Credentials for your own systems
+### Secrets for your own systems
 
-Add an optional **loopthink Target API** credential for the API the runner calls
-(bearer token or a custom header). It stays in n8n. loopthink sends the request to
-make — method, URL, masking rules — but never the key to make it with.
+In loopthink you configure the *shape* of a request — which header, which URL —
+and write `{{secret.NAME}}` where a value belongs:
+
+```
+Header  X-API-Key: {{secret.CRM_API_KEY}}
+```
+
+Then add a **loopthink Target Secrets** credential in n8n with a `CRM_API_KEY`
+entry. The runner fills the placeholder in on the way out. loopthink sends the
+request to make, never the key to make it with — the secret is never stored there
+and never travels.
+
+Two behaviours worth knowing:
+
+- **A missing secret refuses the call.** The literal placeholder is never sent;
+  it would earn a 401 and leave `{{secret.CRM_API_KEY}}` in the target's access
+  log. The error names what is missing.
+- **Execution records show the unresolved form.** A substituted URL can contain a
+  secret, and n8n stores execution data.
+
+A placeholder in a **URL** ends up in the target's access log and in any proxy in
+between. Sometimes an API leaves no choice — but prefer a header where you have one.
 
 ## How it behaves
 
