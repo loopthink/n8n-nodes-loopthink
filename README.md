@@ -111,7 +111,7 @@ internal system:
 npm run docker:up
 ```
 
-n8n comes up on <http://localhost:5678>. From inside the workflow the echo service
+n8n comes up on <http://localhost:5680> (override with `LOOPTHINK_N8N_PORT`). From inside the workflow the echo service
 is reachable at `http://echo:8080` — it returns whatever you send it, which makes
 it easy to watch masking work on fields you choose.
 
