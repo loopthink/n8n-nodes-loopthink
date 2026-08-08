@@ -1,0 +1,64 @@
+{
+  "name": "n8n-nodes-loopthink",
+  "version": "0.1.0",
+  "description": "Run loopthink MCP tools from inside your own network. The node reaches out to loopthink, claims tool calls, executes them against your internal HTTP APIs and returns masked results — no inbound connection required.",
+  "keywords": [
+    "n8n-community-node-package",
+    "loopthink",
+    "mcp",
+    "runner"
+  ],
+  "license": "MIT",
+  "homepage": "https://www.loopthink.ai",
+  "author": {
+    "name": "loopthink",
+    "email": "info@loopthink.ai"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loopthink/n8n-nodes-loopthink.git"
+  },
+  "engines": {
+    "node": ">=20.15"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "npx rimraf dist && tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "format": "prettier nodes credentials --write",
+    "lint": "eslint nodes credentials package.json",
+    "lintfix": "eslint nodes credentials package.json --fix",
+    "test": "mocha -r ts-node/register 'nodes/**/*.spec.ts' --exit"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/LoopthinkRunnerApi.credentials.js",
+      "dist/credentials/LoopthinkTargetApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/LoopthinkRunner/LoopthinkRunner.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "@typescript-eslint/parser": "^7.15.0",
+    "chai": "^4.4.1",
+    "eslint": "^8.57.0",
+    "eslint-plugin-n8n-nodes-base": "^1.16.1",
+    "gulp": "^5.0.0",
+    "mocha": "^10.4.0",
+    "n8n-workflow": "*",
+    "prettier": "^3.3.2",
+    "rimraf": "^5.0.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
