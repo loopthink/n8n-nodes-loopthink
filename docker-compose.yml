@@ -2,7 +2,7 @@
 # point tool calls at so a full round trip can be exercised without touching a
 # real internal system.
 #
-#   npm run docker:up      build + start        → http://localhost:5678
+#   npm run docker:up      build + start        → http://localhost:5679
 #   npm run docker:down    stop and clean up
 #
 # The node is mounted from ./dist, so `npm run build` (or `npm run dev` in a
@@ -13,7 +13,9 @@ services:
     image: docker.n8n.io/n8nio/n8n:latest
     container_name: loopthink-n8n
     ports:
-      - '5678:5678'
+      # Host port is overridable because 5678 is very often already taken by
+      # another n8n on a developer machine. The container side stays 5678.
+      - '${LOOPTHINK_N8N_PORT:-5679}:5678'
     environment:
       # Load community nodes from a directory of their own rather than from
       # ~/.n8n/custom — that path sits inside the data volume, and the two mounts
@@ -29,8 +31,10 @@ services:
       # Keeps the executions list readable while testing. The runner emits one
       # entry per handled tool call, which is exactly what you want to inspect.
       EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
-      N8N_RUNNERS_ENABLED: 'true'
       N8N_DIAGNOSTICS_ENABLED: 'false'
+    # Note: stock n8n logs "Failed to start Python task runner … Python 3 is
+    # missing" on startup. It comes from the image, not from this node, and
+    # nothing here depends on it. Left alone rather than papered over.
     volumes:
       - n8n_data:/home/node/.n8n
       # Read-only: the container has no business writing back into your checkout.
@@ -47,8 +51,9 @@ services:
     container_name: loopthink-echo
     environment:
       HTTP_PORT: '8080'
-    ports:
-      - '8080:8080'
+    # Deliberately not published to the host: n8n reaches it over the compose
+    # network at http://echo:8080, and binding it outside would collide with
+    # whatever else already holds 8080 without buying anything.
 
 volumes:
   n8n_data:

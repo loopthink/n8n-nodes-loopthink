@@ -29,7 +29,7 @@
     "lint": "eslint nodes credentials package.json",
     "lintfix": "eslint nodes credentials package.json --fix",
     "test": "mocha -r ts-node/register 'nodes/**/*.spec.ts' --exit",
-    "docker:up": "npm run build && docker compose up -d && echo \"n8n → http://localhost:5678 | echo API → http://echo:8080 (from inside n8n)\"",
+    "docker:up": "npm run build && docker compose up -d && echo \"n8n → http://localhost:${LOOPTHINK_N8N_PORT:-5679} | echo target (from inside n8n) → http://echo:8080\"",
     "docker:down": "docker compose down -v",
     "docker:logs": "docker compose logs -f n8n",
     "docker:restart": "npm run build && docker compose restart n8n"
