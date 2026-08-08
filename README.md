@@ -82,7 +82,33 @@ npm test
 npm run build
 ```
 
-To try it against a local n8n, `npm link` this package into `~/.n8n/custom`.
+### Local test rig
+
+A compose file brings up n8n with this node already loaded, plus an echo service
+to point tool calls at — so you can exercise a full round trip without a real
+internal system:
+
+```bash
+npm run docker:up
+```
+
+n8n comes up on <http://localhost:5678>. From inside the workflow the echo service
+is reachable at `http://echo:8080` — it returns whatever you send it, which makes
+it easy to watch masking work on fields you choose.
+
+```bash
+npm run docker:restart   # rebuild + reload after a code change
+npm run docker:logs      # follow n8n's log
+npm run docker:down      # stop and remove the volume
+```
+
+The node is mounted from `./dist`, so a change needs a build before it is visible
+in the container. `npm run dev` (tsc in watch mode) plus `docker:restart` is the
+quickest loop.
+
+Custom nodes are loaded from `/custom` rather than `~/.n8n/custom` on purpose:
+that path lives inside n8n's data volume, and the two mounts would otherwise
+shadow each other depending on mount order.
 
 ## License
 
