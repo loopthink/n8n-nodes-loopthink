@@ -2,7 +2,7 @@
 # point tool calls at so a full round trip can be exercised without touching a
 # real internal system.
 #
-#   npm run docker:up      build + start        → http://localhost:5679
+#   npm run docker:up      build + start        → http://localhost:5680
 #   npm run docker:down    stop and clean up
 #
 # The node is mounted from ./dist, so `npm run build` (or `npm run dev` in a
@@ -13,9 +13,15 @@ services:
     image: docker.n8n.io/n8nio/n8n:latest
     container_name: loopthink-n8n
     ports:
-      # Host port is overridable because 5678 is very often already taken by
-      # another n8n on a developer machine. The container side stays 5678.
-      - '${LOOPTHINK_N8N_PORT:-5679}:5678'
+      # 5680, not 5678 (a developer very likely already runs an n8n there) and
+      # not 5679 (n8n's own task broker binds that internally — taking it makes
+      # n8n collide with itself and refuse to start).
+      #
+      # Same port inside and out. n8n derives its editor base URL and cookie
+      # settings from N8N_HOST/N8N_PORT — publish it under a different number and
+      # the session cookie no longer matches the URL you actually open, which
+      # surfaces as every /rest/ call returning 401 and a login that never takes.
+      - '${LOOPTHINK_N8N_PORT:-5680}:${LOOPTHINK_N8N_PORT:-5680}'
     environment:
       # Load community nodes from a directory of their own rather than from
       # ~/.n8n/custom — that path sits inside the data volume, and the two mounts
@@ -25,8 +31,9 @@ services:
       # login form silently refuses to submit.
       N8N_SECURE_COOKIE: 'false'
       N8N_HOST: localhost
-      N8N_PORT: '5678'
+      N8N_PORT: '${LOOPTHINK_N8N_PORT:-5680}'
       N8N_PROTOCOL: http
+      WEBHOOK_URL: 'http://localhost:${LOOPTHINK_N8N_PORT:-5680}/'
       GENERIC_TIMEZONE: Europe/Berlin
       # Keeps the executions list readable while testing. The runner emits one
       # entry per handled tool call, which is exactly what you want to inspect.
