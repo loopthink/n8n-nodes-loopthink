@@ -43,7 +43,9 @@ export class LoopthinkRunner implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'loopthink Runner',
 		name: 'loopthinkRunner',
-		icon: 'file:loopthink.png',
+		// SVG, not the PNG: n8n rendered the SVG here and not the PNG, so the mark
+		// is wrapped in one rather than fighting the icon route.
+		icon: 'file:loopthink.svg',
 		group: ['trigger'],
 		version: 1,
 		subtitle: '={{$parameter["pollInterval"] + "s poll"}}',
