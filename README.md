@@ -26,9 +26,11 @@ Self-hosted n8n only, as community nodes generally are.
 ## Set up
 
 1. In loopthink, open your MCP server → **Runners** → **Add pull runner**.
-2. Copy the block it shows — workspace ID, group ID, secret, API URL. The secret
+2. Copy the block it shows — workspace ID, group ID, secret, queue URL. The secret
    is displayed once and is not recoverable afterwards.
-3. In n8n, create a **loopthink Runner API** credential and paste the four values.
+3. In n8n, create a **loopthink Runner API** credential (the node's
+   **Authentication** slot) and paste the four values. Saving it runs a
+   connection check against the queue, so a wrong value shows up right away.
 4. Add the **loopthink Runner** node to a workflow and **activate** it.
 
 That last step matters: while you are only running *Test workflow* in the editor,
@@ -44,8 +46,8 @@ and write `{{secret.NAME}}` where a value belongs:
 Header  X-API-Key: {{secret.CRM_API_KEY}}
 ```
 
-Then add a **loopthink Target Secrets** credential in n8n with a `CRM_API_KEY`
-entry. The runner fills the placeholder in on the way out. loopthink sends the
+Then add a **loopthink Target Secrets** credential in n8n (the node's **Secrets**
+slot) with a `CRM_API_KEY` entry. The runner fills the placeholder in on the way out. loopthink sends the
 request to make, never the key to make it with — the secret is never stored there
 and never travels.
 

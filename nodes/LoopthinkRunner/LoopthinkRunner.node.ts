@@ -43,7 +43,7 @@ export class LoopthinkRunner implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'loopthink Runner',
 		name: 'loopthinkRunner',
-		icon: 'file:loopthink.svg',
+		icon: 'file:loopthink.png',
 		group: ['trigger'],
 		version: 1,
 		subtitle: '={{$parameter["pollInterval"] + "s poll"}}',
@@ -54,8 +54,10 @@ export class LoopthinkRunner implements INodeType {
 		// so the literal is the portable form here.
 		outputs: ['main'],
 		credentials: [
-			{ name: 'loopthinkRunnerApi', required: true },
-			{ name: 'loopthinkTargetApi', required: false },
+			// Both slots render as a bare "Credential" without these — which tells
+			// nobody which one is which.
+			{ name: 'loopthinkRunnerApi', required: true, displayName: 'Authentication' },
+			{ name: 'loopthinkTargetApi', required: false, displayName: 'Secrets' },
 		],
 		properties: [
 			{
@@ -85,11 +87,18 @@ export class LoopthinkRunner implements INodeType {
 					'Whether to emit each handled call into the workflow. Useful as an audit trail; the call is executed and answered either way.',
 			},
 			{
-				displayName: 'Notice',
-				name: 'notice',
+				displayName: 'Secrets Notice',
+				name: 'secretsNotice',
 				type: 'notice',
 				default:
-					'Results are masked here, inside your network, before they travel back. Credentials for your internal APIs stay in this n8n — loopthink sends the request to make, never the key to make it with.',
+					'<b>Secrets</b> holds the keys for your internal APIs. In loopthink you write <code>{{secret.NAME}}</code> where a value belongs — a header, the URL, the body — and this node fills it in on the way out. A call whose placeholder has no matching entry is refused rather than sent.',
+			},
+			{
+				displayName: 'Privacy Notice',
+				name: 'privacyNotice',
+				type: 'notice',
+				default:
+					'Results are masked here, inside your network, before they travel back. Keys for your internal APIs stay in this n8n — loopthink sends the request to make, never the key to make it with.',
 			},
 		],
 	};
@@ -100,11 +109,11 @@ export class LoopthinkRunner implements INodeType {
 		const requestTimeout = (this.getNodeParameter('requestTimeout', 30) as number) * 1000;
 		const emitResults = this.getNodeParameter('emitResults', true) as boolean;
 
-		const apiUrl = String(credentials.apiUrl || '').replace(/\/+$/, '');
+		const queueUrl = String(credentials.queueUrl || '').replace(/\/+$/, '');
 		const workspaceId = String(credentials.workspaceId);
 		const groupId = String(credentials.groupId);
 		const secret = String(credentials.secret);
-		const base = `${apiUrl}/group/${workspaceId}/${groupId}/runner`;
+		const base = `${queueUrl}/group/${workspaceId}/${groupId}/runner`;
 
 		// Optional: a group may point at an API that needs no secret at all.
 		let secrets: Record<string, string> = {};

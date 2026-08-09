@@ -1,4 +1,4 @@
-import type { ICredentialType, INodeProperties } from 'n8n-workflow';
+import type { ICredentialTestRequest, ICredentialType, INodeProperties } from 'n8n-workflow';
 
 export class LoopthinkRunnerApi implements ICredentialType {
 	name = 'loopthinkRunnerApi';
@@ -9,11 +9,15 @@ export class LoopthinkRunnerApi implements ICredentialType {
 
 	properties: INodeProperties[] = [
 		{
-			displayName: 'API URL',
-			name: 'apiUrl',
+			// Not "API URL": whoever holds the queue is what matters, and that is not
+			// always the loopthink platform. In a two-runner setup a gateway runner in
+			// your own network holds it, and the platform is not involved at all.
+			displayName: 'Queue URL',
+			name: 'queueUrl',
 			type: 'string',
-			default: 'https://mcp.eu.loopthink.ai',
-			description: 'Base URL of the loopthink MCP service. Shown together with the secret when you create the runner.',
+			default: 'https://api.eu.loopthink.ai/mcp',
+			description:
+				'The service holding the work queue — the loopthink platform, or a gateway runner inside your own network. Shown together with the secret when the runner is created.',
 		},
 		{
 			displayName: 'Workspace ID',
@@ -41,7 +45,20 @@ export class LoopthinkRunnerApi implements ICredentialType {
 			default: '',
 			required: true,
 			description:
-				'Shown once when the runner is created in loopthink and never again. Lost it? Issue a new one there — the old one keeps working for 24 hours.',
+				'Shown once when the runner is created and never again. Lost it? Issue a new one there — the old one keeps working for 24 hours.',
 		},
 	];
+
+	// Deliberately /ping and not /next: claiming from the queue is what /next does,
+	// so a connection test pointed at it would swallow a real tool call. /ping only
+	// checks the credentials, and does not count as a heartbeat either — saving a
+	// credential should not make the runner look online in loopthink.
+	test: ICredentialTestRequest = {
+		request: {
+			baseURL: '={{$credentials.queueUrl}}',
+			url: '=/group/{{$credentials.workspaceId}}/{{$credentials.groupId}}/runner/ping',
+			method: 'GET',
+			headers: { Authorization: '=Bearer {{$credentials.secret}}' },
+		},
+	};
 }
