@@ -151,6 +151,11 @@ export class LoopthinkRunnerWs implements INodeType {
 		let reconnectTimer: NodeJS.Timeout | undefined;
 		let backoff = RECONNECT_MIN_MS;
 		let stopped = false;
+		// Whether a socket was ever established. A network that blocks WebSocket
+		// upgrades looks exactly like one that is briefly down — except it never
+		// recovers, and the only visible symptom is a runner that stays offline.
+		let everConnected = false;
+		let failedAttempts = 0;
 
 		const report = async (requestId: string, result: IDataObject): Promise<void> => {
 			await this.helpers.httpRequest({
@@ -229,6 +234,8 @@ export class LoopthinkRunnerWs implements INodeType {
 				// Only reset once a connection actually succeeded. Resetting on the
 				// attempt would turn a refusing server into a tight retry loop.
 				backoff = RECONNECT_MIN_MS;
+				everConnected = true;
+				failedAttempts = 0;
 				this.logger.info('loopthink Runner (WebSocket): connected');
 				pinger = setInterval(() => {
 					if (socket?.readyState === WebSocket.OPEN) {
@@ -254,6 +261,19 @@ export class LoopthinkRunnerWs implements INodeType {
 			const scheduleReconnect = () => {
 				if (pinger) clearInterval(pinger);
 				if (stopped) return;
+
+				// Say it plainly, once. Repeated failures with no connection ever
+				// established are almost always a proxy refusing the upgrade — and
+				// without this the only symptom is a runner that never appears in
+				// loopthink, with nothing anywhere explaining why.
+				failedAttempts += 1;
+				if (!everConnected && failedAttempts === 3) {
+					this.logger.error(
+						'loopthink Runner (WebSocket): could not establish a connection after three attempts. ' +
+							'This network most likely does not allow WebSocket upgrades (a proxy, or TLS inspection breaking them). ' +
+							'Use the polling "loopthink Runner" node instead — it needs nothing but plain HTTPS.',
+					);
+				}
 				reconnectTimer = setTimeout(connect, backoff);
 				backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
 			};

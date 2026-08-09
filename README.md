@@ -17,6 +17,22 @@ Claude ──► loopthink ──► queue ──┐
                           masked result ──► loopthink ──► Claude
 ```
 
+## Two nodes, one runner
+
+| | **loopthink Runner** | **loopthink Runner (WebSocket)** |
+|---|---|---|
+| How work arrives | polled every few seconds | pushed the moment it is queued |
+| Latency added | half the poll interval | none |
+| Needs | plain HTTPS | a network that allows WebSocket upgrades |
+| Cost to loopthink | ~$6 per runner/month | ~$0.04 |
+
+Both serve the same queue and can even run against the same group, so switching
+loses nothing: work a socket does not take stays queued for a polling runner.
+
+**Start with the WebSocket node.** If it cannot connect, it says so in the log
+after three attempts — that is the answer, and the polling node is the fallback.
+Corporate proxies and TLS inspection are the usual reason an upgrade fails.
+
 ## Install
 
 Settings → Community Nodes → Install → `n8n-nodes-loopthink`
@@ -31,7 +47,7 @@ Self-hosted n8n only, as community nodes generally are.
 3. In n8n, create a **loopthink Runner API** credential (the node's
    **Authentication** slot) and paste the four values. Saving it runs a
    connection check against the queue, so a wrong value shows up right away.
-4. Add the **loopthink Runner** node to a workflow and **activate** it.
+4. Add a runner node to a workflow and **activate** it (see the table above for which).
 
 That last step matters: while you are only running *Test workflow* in the editor,
 the node listens for a short window and then stops. It polls continuously only
