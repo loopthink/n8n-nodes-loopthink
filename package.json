@@ -32,7 +32,7 @@
     "docker:up": "npm run build && docker compose up -d && echo \"n8n → http://127.0.0.1:${LOOPTHINK_N8N_PORT:-5680} | echo target (from inside n8n) → http://echo:8080\"",
     "docker:down": "docker compose down -v",
     "docker:logs": "docker compose logs -f n8n",
-    "docker:restart": "npm run build && docker compose restart n8n"
+    "docker:restart": "npm run build && docker compose up -d --force-recreate n8n"
   },
   "files": [
     "dist"

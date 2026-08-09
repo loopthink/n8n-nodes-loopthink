@@ -48,9 +48,14 @@ services:
     # nothing here depends on it. Left alone rather than papered over.
     volumes:
       - n8n_data:/home/node/.n8n
+      # The whole package, not ./dist: `npm run build` starts with rimraf dist,
+      # which deletes the very directory a bind mount points at. The container
+      # then holds a dangling inode and every later rebuild is invisible to it —
+      # silently, with the node still running the version loaded at startup.
+      # Mounting a directory that survives the build avoids that entirely.
+      #
       # Read-only: the container has no business writing back into your checkout.
-      - ./dist:/custom/n8n-nodes-loopthink/dist:ro
-      - ./package.json:/custom/n8n-nodes-loopthink/package.json:ro
+      - .:/custom/n8n-nodes-loopthink:ro
     depends_on:
       - echo
 

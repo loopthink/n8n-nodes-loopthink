@@ -123,9 +123,14 @@ npm run docker:logs      # follow n8n's log
 npm run docker:down      # stop and remove the volume
 ```
 
-The node is mounted from `./dist`, so a change needs a build before it is visible
-in the container. `npm run dev` (tsc in watch mode) plus `docker:restart` is the
-quickest loop.
+A change needs a build before the container sees it, and n8n only reads node
+definitions at startup — so `docker:restart` does both (it force-recreates the
+container, because `docker compose restart` alone would not re-resolve the mount).
+
+The whole package is mounted, not just `./dist`: the build begins with
+`rimraf dist`, and a bind mount pointing at a directory that gets deleted leaves
+the container holding a dangling inode. Every later rebuild would then be
+invisible to it — silently, with the node still running whatever loaded at startup.
 
 Custom nodes are loaded from `/custom` rather than `~/.n8n/custom` on purpose:
 that path lives inside n8n's data volume, and the two mounts would otherwise
