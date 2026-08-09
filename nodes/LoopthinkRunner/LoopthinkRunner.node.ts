@@ -31,6 +31,7 @@ interface QueuedRequest {
 	request: {
 		method: string;
 		url: string;
+		query?: Record<string, string>;
 		headers?: Record<string, string>;
 		body?: unknown;
 	};
@@ -179,9 +180,17 @@ export class LoopthinkRunner implements INodeType {
 				// never be logged or emitted — it holds the actual secrets.
 				const resolved = substituteSecrets(job.request, secrets);
 
+				// Assembled here, after substitution: encoding a {{secret.NAME}}
+				// placeholder first would hide it behind %7B%7B…%7D%7D, and it would
+				// travel to the target unresolved and unreported.
+				const url = new URL(resolved.url);
+				Object.entries(resolved.query || {}).forEach(([key, value]) =>
+					url.searchParams.set(key, String(value)),
+				);
+
 				const response = await this.helpers.httpRequest({
 					method: (resolved.method || 'GET') as any,
-					url: resolved.url,
+					url: url.toString(),
 					headers: resolved.headers || {},
 					body: resolved.body ?? undefined,
 					json: true,

@@ -76,3 +76,22 @@ describe('Secret placeholders', () => {
 		expect(secretsFromCredential(undefined)).to.deep.equal({});
 	});
 });
+
+describe('Query placeholders survive to substitution', () => {
+	it('substitutes before the URL is assembled', () => {
+		// The backend keeps query values out of the URL for exactly this reason:
+		// percent-encoding them first turns {{secret.X}} into %7B%7B…%7D%7D, which
+		// no longer matches, and the placeholder reaches the target verbatim.
+		const resolved = substituteSecrets(
+			{ url: 'https://echo.internal/x', query: { name: 'Hello_Peter{{secret.CRM_API_KEY}}' } },
+			SECRETS,
+		);
+
+		const url = new URL(resolved.url);
+		Object.entries(resolved.query).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+
+		expect(url.toString()).to.contain('Hello_Peter');
+		expect(url.toString()).to.not.contain('secret.');
+		expect(url.searchParams.get('name')).to.equal('Hello_Peter sk-live-123'.replace(' ', ''));
+	});
+});
