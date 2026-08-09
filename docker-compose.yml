@@ -43,6 +43,10 @@ services:
       # entry per handled tool call, which is exactly what you want to inspect.
       EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
       N8N_DIAGNOSTICS_ENABLED: 'false'
+      # Watches the node/credential files and reloads them in place, so a rebuild
+      # does not need the container restarted. Development only — it costs a file
+      # watcher and is not something to run in production.
+      N8N_DEV_RELOAD: 'true'
     # Note: stock n8n logs "Failed to start Python task runner … Python 3 is
     # missing" on startup. It comes from the image, not from this node, and
     # nothing here depends on it. Left alone rather than papered over.

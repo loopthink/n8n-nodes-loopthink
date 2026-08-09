@@ -92,18 +92,13 @@ export class LoopthinkRunner implements INodeType {
 					'Whether to emit each handled call into the workflow. Useful as an audit trail; the call is executed and answered either way.',
 			},
 			{
-				displayName: 'Secrets Notice',
-				name: 'secretsNotice',
+				// A notice renders its displayName — `default` is not shown at all, which
+				// is easy to get backwards and leaves an empty box behind.
+				displayName:
+					'Results are masked here, inside your network, before they travel back. Keys for your internal APIs stay in this n8n: write <code>{{secret.NAME}}</code> in loopthink where a value belongs, and add a matching entry under <b>Secrets</b>. A call whose placeholder has no entry is refused rather than sent.',
+				name: 'notice',
 				type: 'notice',
-				default:
-					'<b>Secrets</b> holds the keys for your internal APIs. In loopthink you write <code>{{secret.NAME}}</code> where a value belongs — a header, the URL, the body — and this node fills it in on the way out. A call whose placeholder has no matching entry is refused rather than sent.',
-			},
-			{
-				displayName: 'Privacy Notice',
-				name: 'privacyNotice',
-				type: 'notice',
-				default:
-					'Results are masked here, inside your network, before they travel back. Keys for your internal APIs stay in this n8n — loopthink sends the request to make, never the key to make it with.',
+				default: '',
 			},
 		],
 	};

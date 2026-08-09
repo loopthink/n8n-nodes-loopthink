@@ -123,9 +123,13 @@ npm run docker:logs      # follow n8n's log
 npm run docker:down      # stop and remove the volume
 ```
 
-A change needs a build before the container sees it, and n8n only reads node
-definitions at startup — so `docker:restart` does both (it force-recreates the
-container, because `docker compose restart` alone would not re-resolve the mount).
+`npm run dev` watches TypeScript and icons; with `N8N_DEV_RELOAD` set in the
+compose file, n8n picks the rebuilt files up without a container restart. The
+browser still needs a refresh to fetch the new node definition.
+
+`docker:restart` remains for the cases dev reload does not cover (a changed
+credential class, or anything in docker-compose.yml). It force-recreates rather
+than restarts, because `docker compose restart` would not re-resolve the mount.
 
 The whole package is mounted, not just `./dist`: the build begins with
 `rimraf dist`, and a bind mount pointing at a directory that gets deleted leaves
