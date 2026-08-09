@@ -44,12 +44,14 @@
       "dist/credentials/LoopthinkTargetApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/LoopthinkRunner/LoopthinkRunner.node.js"
+      "dist/nodes/LoopthinkRunner/LoopthinkRunner.node.js",
+      "dist/nodes/LoopthinkRunnerWs/LoopthinkRunnerWs.node.js"
     ]
   },
   "devDependencies": {
     "@types/chai": "^4.3.11",
     "@types/mocha": "^10.0.6",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/parser": "^7.15.0",
     "chai": "^4.4.1",
     "concurrently": "^10.0.4",
@@ -65,5 +67,8 @@
   },
   "peerDependencies": {
     "n8n-workflow": "*"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
   }
 }
