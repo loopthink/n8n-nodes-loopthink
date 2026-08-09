@@ -2,7 +2,7 @@
 # point tool calls at so a full round trip can be exercised without touching a
 # real internal system.
 #
-#   npm run docker:up      build + start        → http://localhost:5680
+#   npm run docker:up      build + start        → http://127.0.0.1:5680
 #   npm run docker:down    stop and clean up
 #
 # The node is mounted from ./dist, so `npm run build` (or `npm run dev` in a
@@ -30,10 +30,14 @@ services:
       # Plain http on localhost: without this n8n sets Secure cookies and the
       # login form silently refuses to submit.
       N8N_SECURE_COOKIE: 'false'
-      N8N_HOST: localhost
+      # 127.0.0.1, not localhost: cookies are scoped by host and ignore the port,
+      # so an n8n-auth cookie from another n8n on localhost:5678 is also sent
+      # here — and this instance, with its own encryption key, cannot verify it
+      # and answers 401 to everything. A different host name keeps the two apart.
+      N8N_HOST: 127.0.0.1
       N8N_PORT: '${LOOPTHINK_N8N_PORT:-5680}'
       N8N_PROTOCOL: http
-      WEBHOOK_URL: 'http://localhost:${LOOPTHINK_N8N_PORT:-5680}/'
+      WEBHOOK_URL: 'http://127.0.0.1:${LOOPTHINK_N8N_PORT:-5680}/'
       GENERIC_TIMEZONE: Europe/Berlin
       # Keeps the executions list readable while testing. The runner emits one
       # entry per handled tool call, which is exactly what you want to inspect.
