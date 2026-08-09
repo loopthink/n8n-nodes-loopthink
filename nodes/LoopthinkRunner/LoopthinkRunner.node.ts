@@ -5,6 +5,7 @@ import type {
 	ITriggerFunctions,
 	ITriggerResponse,
 } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 
 import { applyMasking, rulesForScope, type MaskingRule } from './masking';
 import { MissingSecretError, secretsFromCredential, substituteSecrets } from './secrets';
@@ -45,7 +46,9 @@ export class LoopthinkRunner implements INodeType {
 		name: 'loopthinkRunner',
 		// SVG, not the PNG: n8n rendered the SVG here and not the PNG, so the mark
 		// is wrapped in one rather than fighting the icon route.
-		icon: 'file:loopthink.svg',
+		// Distinct filename on purpose: the icon URL is the cache key, so reusing
+		// loopthink.svg served the browser's copy of an older mark forever.
+		icon: 'file:loopthink-mark.svg',
 		group: ['trigger'],
 		version: 1,
 		subtitle: '={{$parameter["pollInterval"] + "s poll"}}',
@@ -115,6 +118,24 @@ export class LoopthinkRunner implements INodeType {
 		const workspaceId = String(credentials.workspaceId);
 		const groupId = String(credentials.groupId);
 		const secret = String(credentials.secret);
+		// Say so loudly. A blank field here used to build a nonsense URL and poll it
+		// forever: the workflow looked healthy, the runner just never showed up in
+		// loopthink and nothing said why.
+		for (const [label, value] of [
+			['Queue URL', queueUrl],
+			['Workspace ID', workspaceId],
+			['Group ID', groupId],
+			['Secret', secret],
+		] as const) {
+			if (!value) {
+				throw new NodeOperationError(
+					this.getNode(),
+					`${label} is missing from the loopthink Runner credential`,
+					{ description: 'Open the credential and fill it in — the values are shown when the runner is created in loopthink.' },
+				);
+			}
+		}
+
 		const base = `${queueUrl}/group/${workspaceId}/${groupId}/runner`;
 
 		// Optional: a group may point at an API that needs no secret at all.
