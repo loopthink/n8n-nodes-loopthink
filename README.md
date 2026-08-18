@@ -117,28 +117,18 @@ between. Sometimes an API leaves no choice — but prefer a header where you hav
 
 ## The loopthink node
 
-**Send Result** ends a workflow-tool branch: it masks the answer and sends it
-back. Masking is not a setting on it. The only way to answer a call is through
-this operation, so an unmasked result is not something a workflow can send by
-forgetting a step.
+It does one thing: mask the answer and send it back. Masking is not a setting on
+it — the only way to answer a call is through this node, so an unmasked result is
+not something a workflow can send by forgetting a step.
 
-**Build Index Page** turns rows into one page of an index. It deliberately does
-not duplicate what a source already does well — let the Data Table sort, let SQL
-filter. What no source here offers:
-
-- **Optional bounds.** A Data Table condition cannot be left out when a tool
-  parameter is absent: an empty value fails with `Invalid date string ''`. A bound
-  left empty here is simply not applied.
-- **Offset paging.** The Data Table node has a limit and no offset, so a second
-  page cannot be expressed with it at all.
-- **The envelope.** `total` and `hasMore`, which a model needs to know whether to
-  ask again.
-- **Fewer fields.** An index should not ship whole records. Masking protects a
-  value that travels; leaving the field out means it never does.
-
-Against a real database, turn on **Rows Are Already Paged**: SQL does the
-filtering, ordering and `LIMIT/OFFSET`, the node only builds the envelope and
-trims the columns, and the row count comes from `count(*) OVER ()`.
+There was briefly a second operation that built index pages, and it turned out to
+be earning its place from a limitation that was not there. Paging by **cursor**
+rather than offset lets the source do the work: `id < c` with a Limit is one
+comparison a Data Table node or a `WHERE` clause expresses natively, and it hands
+back only the page. n8n's own **Aggregate** node then bundles the rows into one
+item and trims the columns, and an **Edit Fields** node adds `nextCursor` and
+`hasMore`. Nothing was left for ours to do that a standard node did not already
+do better. See [examples/](examples) for all three worked through.
 
 ## Masking
 

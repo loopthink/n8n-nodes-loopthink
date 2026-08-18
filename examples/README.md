@@ -9,10 +9,10 @@ They share one shape:
 ```
 [loopthink Runner] ─ Executed ─────────────────────────► (audit trail)
                    └ To Answer → [Switch on {{$json.tool}}]
-                                    ├ …_index → read → [loopthink: Build Index Page] ─┐
-                                    ├ …_show  → read ──────────────────────────────────┤
-                                    └ unhandled ───────────────────────────────────────┤
-                                                            [loopthink: Send Result] ◄─┘
+                                    ├ …_index → read → [Aggregate] → [Edit Fields] ─┐
+                                    ├ …_show  → read ────────────────────────────────┤
+                                    └ unhandled ─────────────────────────────────────┤
+                                                                    [loopthink] ◄─────┘
 ```
 
 The runner does not know which tools this workflow answers. It emits every
@@ -22,16 +22,20 @@ can read them.
 | | [data-table.json](data-table.json) | [postgres.json](postgres.json) | [http-api.json](http-api.json) |
 |---|---|---|---|
 | Source | n8n Data Table | Postgres | any HTTP API |
-| Sorting | the Data Table node | `ORDER BY` | Build Index Page |
-| Fixed filters | the Data Table node | `WHERE` | Build Index Page |
-| Optional date bounds | Build Index Page | `WHERE`, cast so `NULL` drops out | Build Index Page |
-| Paging, envelope, field trim | Build Index Page | `LIMIT/OFFSET` + `count(*) OVER ()`, envelope from Build Index Page | Build Index Page |
+| Cursor key | row `id` | `(created_at, id)` | whatever the API pages by |
+| Filter, sort, page | the Data Table node | `WHERE` / `ORDER BY` / `LIMIT` | the API's own parameters |
+| Bundle and trim | Aggregate | Aggregate | Aggregate |
+| `nextCursor`, `hasMore` | Edit Fields | Edit Fields | Edit Fields |
 
-**Let the source do what it does well.** A database filters, orders and pages
-better than any node can, and on a table of real size it is the only place that
-scales — there, Build Index Page runs with *Rows Are Already Paged* and only
-shapes the answer. A Data Table sorts and filters natively too; what it cannot do
-is leave a filter out, page from an offset, or count the total.
+**The source does all of it.** Paging by cursor rather than offset is what makes
+that possible: `id < c` with a Limit is one comparison the source can do itself,
+and it hands back only the page. Offset made it hand over every row so the
+workflow could slice them, and it shifted the whole listing under the caller
+whenever a row was inserted between two pages.
+
+Everything after the source is a standard n8n node — Aggregate bundles the rows
+into one item and trims the columns, Edit Fields adds the cursor. loopthink's own
+node does one thing: mask the answer and send it.
 
 ## Import
 
@@ -54,13 +58,19 @@ answer it, branch or no branch.
 | Parameter | Type | Meaning |
 |---|---|---|
 | `limit` | number | Rows per page, default 20 |
-| `offset` | number | Rows to skip, for the next page |
+| `cursor` | string | `nextCursor` from the previous response; omit for the first page |
 | `sort` | string | `newest` (default) or `oldest`, by creation date |
 | `created_after` / `created_before` | string | ISO bounds on the creation date |
 | `updated_after` / `updated_before` | string | ISO bounds on the last change |
 
-Returns `{ items, total, offset, limit, hasMore }`. `items` carries id, name,
-country and the creation date — deliberately not the whole record.
+Returns `{ items, nextCursor, hasMore }` — the same shape n8n's own public API
+uses. `items` carries id, name, country and the creation date, deliberately not
+the whole record.
+
+No `total`: counting is a second query, and with a cursor the only question is
+whether to ask again. `hasMore` answers that — a full page is the sole evidence
+there may be more, so a listing that ends on an exact multiple of `limit` costs
+one extra call to discover it is finished.
 
 `*_show` takes a required `id` and returns the full record.
 
@@ -77,29 +87,41 @@ one that carries it.
 
 ## Notes per source
 
-**n8n Data Table.** Sorting goes in the node (*Order By*). Fixed filters can too:
-the node converts an ISO string to a real Date for date columns, so a date
-condition is correct. An *optional* bound cannot: leaving the value empty fails
-with `Invalid date string ''`, so bounds driven by a tool parameter stay in Build
-Index Page, where an empty bound is simply not applied.
+**n8n Data Table.** The cursor is the row `id`, not `createdAt`. A condition list
+here is all ANDed or all ORed, so the `(createdAt, id)` tiebreak a non-unique sort
+key needs cannot be written — and a strict `<` on a non-unique key silently skips
+every row sharing the boundary value. Three of the seeded rows share a
+millisecond, so this is not hypothetical. The id is unique and ascends with
+insertion, so ordering by it is insertion order.
 
-**Postgres.** Two details that are easy to get wrong:
+Every bound gets a sentinel (`0001-01-01`, `9999-12-31`, a huge id) rather than
+being left out, because a condition with an empty value fails with `Invalid date
+string ''`. A sentinel keeps the condition list fixed and lets an absent
+parameter mean "no bound".
+
+**Postgres.** SQL can express the tiebreak the Data Table cannot, so here the
+order really is by date with the id only deciding ties:
 
 ```sql
 WHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
+  AND ($5::timestamptz IS NULL OR (created_at, id) < ($5::timestamptz, $6::int))
 ORDER BY created_at DESC, id DESC
-LIMIT $5 OFFSET $6
+LIMIT $7
 ```
 
-Bounds are parameters and are cast, so an absent one is a real `NULL` and the
-predicate drops out; passing `''` instead fails the cast. And the sort direction
-cannot be a parameter, so it is interpolated — from an expression that can only
-ever produce `ASC` or `DESC`, a whitelist by construction. Never interpolate the
-raw tool parameter there.
+The cursor is `"<iso>|<id>"`, opaque to the caller. Bounds are parameters and are
+cast, so an absent one is a real `NULL` and the predicate drops out; passing `''`
+instead fails the cast. The two things SQL cannot take as parameters — the sort
+direction and the comparison operator — are interpolated from one expression that
+can only ever produce `ASC`/`DESC` and `<`/`>`, a whitelist by construction. Never
+interpolate the raw tool parameter there.
 
 **HTTP API.** Use this when the platform cannot describe the call on its own: a
 body to assemble, a response to reshape, a call to make first. A plain GET
 against a documented path needs none of it — author that in loopthink as an HTTP
-tool and the runner issues it with no workflow at all. Credentials for your own
-API stay in n8n, on the HTTP Request node. Verified against a public JSON list
-API standing in for a customer's own.
+tool and the runner issues it with no workflow at all.
+
+An API that pages by its own token is the easy case: hand the cursor back
+untouched and read the next one out of the response instead of off the last row.
+Credentials for your own API stay in n8n, on the HTTP Request node. Verified
+against a public JSON list API standing in for a customer's own.

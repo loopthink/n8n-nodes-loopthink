@@ -13,7 +13,7 @@
       "type": "n8n-nodes-loopthink.loopthinkRunner",
       "typeVersion": 1,
       "position": [
-        -620,
+        -680,
         0
       ],
       "credentials": {
@@ -87,7 +87,7 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        -380,
+        -440,
         60
       ]
     },
@@ -97,7 +97,7 @@
         "url": "=<API_BASE_URL>/customers",
         "sendQuery": true,
         "specifyQuery": "json",
-        "jsonQuery": "={{ JSON.stringify({ country: $json.params.country || undefined }) }}",
+        "jsonQuery": "={{ JSON.stringify({ after: $json.params.cursor || undefined, limit: $json.params.limit || 20, created_after: $json.params.created_after || undefined }) }}",
         "options": {
           "response": {
             "response": {
@@ -111,34 +111,55 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        -140,
+        -180,
         -160
       ]
     },
     {
       "parameters": {
-        "operation": "page",
-        "sortBy": "createdAt",
-        "sortDirection": "={{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'asc' : 'desc' }}",
-        "offset": "={{ $('loopthink Runner').first().json.params.offset || 0 }}",
-        "limit": "={{ $('loopthink Runner').first().json.params.limit || 20 }}",
-        "fields": "id, name, country, createdAt",
-        "dateFilters": {
-          "filters": [
-            {
-              "field": "createdAt",
-              "from": "={{ $('loopthink Runner').first().json.params.created_after || '' }}",
-              "to": "={{ $('loopthink Runner').first().json.params.created_before || '' }}"
-            }
-          ]
-        }
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "items",
+        "include": "specifiedFields",
+        "fieldsToInclude": "id, name, country, createdAt",
+        "options": {}
       },
-      "id": "page",
-      "name": "Page",
-      "type": "n8n-nodes-loopthink.loopthink",
+      "id": "aggregate",
+      "name": "Aggregate",
+      "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
       "position": [
-        120,
+        80,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c",
+              "name": "nextCursor",
+              "type": "string",
+              "value": "={{ $json.items.length ? String($json.items[$json.items.length - 1].id) : null }}"
+            },
+            {
+              "id": "m",
+              "name": "hasMore",
+              "type": "boolean",
+              "value": "={{ $json.items.length >= ($('loopthink Runner').first().json.params.limit || 20) }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "envelope",
+      "name": "Envelope",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        320,
         -160
       ]
     },
@@ -159,8 +180,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        -140,
-        100
+        -180,
+        120
       ]
     },
     {
@@ -175,7 +196,7 @@
       "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        380,
+        580,
         -160
       ],
       "credentials": {
@@ -197,8 +218,8 @@
       "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        380,
-        100
+        580,
+        120
       ],
       "credentials": {
         "loopthinkRunnerApi": {
@@ -219,8 +240,8 @@
       "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        380,
-        320
+        580,
+        340
       ],
       "credentials": {
         "loopthinkRunnerApi": {
@@ -272,14 +293,25 @@
       "main": [
         [
           {
-            "node": "Page",
+            "node": "Aggregate",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Page": {
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envelope": {
       "main": [
         [
           {

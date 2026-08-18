@@ -13,7 +13,7 @@
       "type": "n8n-nodes-loopthink.loopthinkRunner",
       "typeVersion": 1,
       "position": [
-        -620,
+        -680,
         0
       ],
       "credentials": {
@@ -87,16 +87,16 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        -380,
+        -440,
         60
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=SELECT id, name, country, created_at, updated_at, count(*) OVER () AS total\nFROM customers\nWHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)\n  AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)\n  AND ($3::timestamptz IS NULL OR updated_at >= $3::timestamptz)\n  AND ($4::timestamptz IS NULL OR updated_at <= $4::timestamptz)\nORDER BY created_at {{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'ASC' : 'DESC' }}, id {{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'ASC' : 'DESC' }}\nLIMIT $5 OFFSET $6",
+        "query": "=SELECT id, name, country, created_at, updated_at\nFROM customers\nWHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)\n  AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)\n  AND ($3::timestamptz IS NULL OR updated_at >= $3::timestamptz)\n  AND ($4::timestamptz IS NULL OR updated_at <= $4::timestamptz)\n  AND ($5::timestamptz IS NULL OR (created_at, id) {{ $('loopthink Runner').first().json.params.sort !== 'oldest' ? '<' : '>' }} ($5::timestamptz, $6::int))\nORDER BY created_at {{ $('loopthink Runner').first().json.params.sort !== 'oldest' ? 'DESC' : 'ASC' }}, id {{ $('loopthink Runner').first().json.params.sort !== 'oldest' ? 'DESC' : 'ASC' }}\nLIMIT $7",
         "options": {
-          "queryReplacement": "={{ [ $json.params.created_after || null, $json.params.created_before || null, $json.params.updated_after || null, $json.params.updated_before || null, $json.params.limit || 20, $json.params.offset || 0 ] }}"
+          "queryReplacement": "={{ [ $json.params.created_after || null, $json.params.created_before || null, $json.params.updated_after || null, $json.params.updated_before || null, ($json.params.cursor || '').split('|')[0] || null, Number(($json.params.cursor || '').split('|')[1]) || 0, $json.params.limit || 20 ] }}"
         }
       },
       "id": "query-customers",
@@ -104,7 +104,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        -140,
+        -180,
         -160
       ],
       "credentials": {
@@ -116,19 +116,49 @@
     },
     {
       "parameters": {
-        "operation": "page",
-        "alreadyPaged": true,
-        "totalField": "total",
-        "offset": "={{ $('loopthink Runner').first().json.params.offset || 0 }}",
-        "limit": "={{ $('loopthink Runner').first().json.params.limit || 20 }}",
-        "fields": "id, name, country, created_at"
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "items",
+        "include": "specifiedFields",
+        "fieldsToInclude": "id, name, country, created_at",
+        "options": {}
       },
-      "id": "page",
-      "name": "Page",
-      "type": "n8n-nodes-loopthink.loopthink",
+      "id": "aggregate",
+      "name": "Aggregate",
+      "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
       "position": [
-        120,
+        80,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c",
+              "name": "nextCursor",
+              "type": "string",
+              "value": "={{ $json.items.length ? $json.items[$json.items.length - 1].created_at + '|' + $json.items[$json.items.length - 1].id : null }}"
+            },
+            {
+              "id": "m",
+              "name": "hasMore",
+              "type": "boolean",
+              "value": "={{ $json.items.length >= ($('loopthink Runner').first().json.params.limit || 20) }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "envelope",
+      "name": "Envelope",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        320,
         -160
       ]
     },
@@ -145,8 +175,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        -140,
-        100
+        -180,
+        120
       ],
       "credentials": {
         "postgres": {
@@ -167,7 +197,7 @@
       "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        380,
+        580,
         -160
       ],
       "credentials": {
@@ -189,8 +219,8 @@
       "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        380,
-        100
+        580,
+        120
       ],
       "credentials": {
         "loopthinkRunnerApi": {
@@ -211,8 +241,8 @@
       "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        380,
-        320
+        580,
+        340
       ],
       "credentials": {
         "loopthinkRunnerApi": {
@@ -264,14 +294,25 @@
       "main": [
         [
           {
-            "node": "Page",
+            "node": "Aggregate",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Page": {
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envelope": {
       "main": [
         [
           {
