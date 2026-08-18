@@ -30,24 +30,30 @@ output of its own, labelled with the tool name; end that branch with a
 **loopthink Result** node. A tool that arrives but is not listed is answered with
 a clean error rather than left to time out.
 
-See [examples/](examples) for two working workflows, one over an n8n Data Table
-and one over Postgres.
+See [examples/](examples) for three working workflows: over an n8n Data Table,
+over Postgres, and over an HTTP API.
 
-## Two nodes, one runner
+## Two nodes
 
-| | **loopthink Runner** | **loopthink Runner (WebSocket)** |
+**loopthink Runner** is the trigger: it claims work and executes the HTTP tools.
+**loopthink** is what the workflow does with the rest — *Build Index Page* and
+*Send Result*.
+
+### One transport setting, not two nodes
+
+| | **Polling** | **WebSocket** |
 |---|---|---|
-| How work arrives | polled every few seconds | pushed the moment it is queued |
+| How work arrives | asked for every few seconds | pushed the moment it is queued |
 | Latency added | half the poll interval | none |
 | Needs | plain HTTPS | a network that allows WebSocket upgrades |
 | Cost to loopthink | ~$6 per runner/month | ~$0.04 |
 
-Both serve the same queue and can even run against the same group, so switching
-loses nothing: work a socket does not take stays queued for a polling runner.
+Both serve the same queue, so switching loses nothing: work a socket does not
+take stays queued.
 
-**Start with the WebSocket node.** If it cannot connect, it says so in the log
-after three attempts — that is the answer, and the polling node is the fallback.
-Corporate proxies and TLS inspection are the usual reason an upgrade fails.
+**Start with WebSocket.** If it cannot connect, the log says so after three
+attempts — that is the answer, and Polling is the fallback. Corporate proxies and
+TLS inspection are the usual reason an upgrade fails.
 
 ## Install
 
@@ -109,29 +115,30 @@ between. Sometimes an API leaves no choice — but prefer a header where you hav
 - **Transient failures do not stop it.** A failed poll is logged and retried;
   stopping would leave the runner silently dead until someone noticed.
 
-## The other two nodes
+## The loopthink node
 
-**loopthink Result** ends a workflow-tool branch: it masks the answer and sends
-it back. Masking is not a setting on it. The only way to answer a call is through
-this node, so an unmasked result is not something a workflow can send by
+**Send Result** ends a workflow-tool branch: it masks the answer and sends it
+back. Masking is not a setting on it. The only way to answer a call is through
+this operation, so an unmasked result is not something a workflow can send by
 forgetting a step.
 
-**loopthink Page** turns rows into one page of an index. Three things a listing
-needs that the source often gets wrong or does not offer:
+**Build Index Page** turns rows into one page of an index. It deliberately does
+not duplicate what a source already does well — let the Data Table sort, let SQL
+filter. What no source here offers:
 
-- **Date ranges that are actually dates.** n8n's Data Table compares filter values
-  as strings against a stored `YYYY-MM-DD HH:MM:SS.mmm`, so a bound written as
-  `2026-08-18T00:00:00Z` sorts *after* every row from that day: the `T` outranks
-  the space. It matches nothing and looks like an empty table.
+- **Optional bounds.** A Data Table condition cannot be left out when a tool
+  parameter is absent: an empty value fails with `Invalid date string ''`. A bound
+  left empty here is simply not applied.
 - **Offset paging.** The Data Table node has a limit and no offset, so a second
   page cannot be expressed with it at all.
+- **The envelope.** `total` and `hasMore`, which a model needs to know whether to
+  ask again.
 - **Fewer fields.** An index should not ship whole records. Masking protects a
   value that travels; leaving the field out means it never does.
 
-Against a real database, turn on **Rows Are Already Paged** and let SQL do the
-filtering, ordering and `LIMIT/OFFSET` — the node then only builds the envelope
-(`items`, `total`, `offset`, `limit`, `hasMore`) and trims the columns. Read the
-row count from `count(*) OVER ()`.
+Against a real database, turn on **Rows Are Already Paged**: SQL does the
+filtering, ordering and `LIMIT/OFFSET`, the node only builds the envelope and
+trims the columns, and the row count comes from `count(*) OVER ()`.
 
 ## Masking
 
@@ -149,10 +156,9 @@ for HTTP tools **without** a scope, or it will silently do nothing.
 ## Scope
 
 HTTP tools are executed by the node; anything else is a workflow tool your own
-branch answers. HubSpot and Salesforce importers are not executed here.
-
-The WebSocket node does not route workflow tools yet — use the polling node for
-those.
+branch answers. Both transports do both, so switching between them changes
+nothing but latency and cost. HubSpot and Salesforce importers are not executed
+here.
 
 ## Develop
 

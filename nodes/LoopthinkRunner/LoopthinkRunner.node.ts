@@ -9,14 +9,13 @@ import { NodeOperationError } from 'n8n-workflow';
 
 import { applyMasking, rulesForScope } from './masking';
 import { MissingSecretError, secretsFromCredential, substituteSecrets } from './secrets';
+import { startSocket } from './socket';
 import {
-	configuredOutputs,
-	handOverToBranch,
 	emitOn,
+	emitWorkflowTool,
+	EXECUTED_OUTPUT,
 	isParamsRequest,
-	outputCount,
-	toolList,
-	workflowToolsProperty,
+	RUNNER_OUTPUTS,
 	type HttpPayload,
 	type QueuedRequest,
 } from './workflowTools';
@@ -47,13 +46,13 @@ export class LoopthinkRunner implements INodeType {
 		icon: 'file:loopthink-mark.svg',
 		group: ['trigger'],
 		version: 1,
-		subtitle: '={{$parameter["pollInterval"] + "s poll"}}',
-		description: 'Executes loopthink MCP tool calls against internal HTTP APIs',
+		subtitle: '={{$parameter["transport"] === "websocket" ? "pushed" : $parameter["pollInterval"] + "s poll"}}',
+		description: 'Claims loopthink MCP tool calls and executes the HTTP ones inside your network',
 		defaults: { name: 'loopthink Runner' },
 		inputs: [],
 		// n8n-workflow 2.x exposes NodeConnectionType as a type, not an enum value,
 		// so the literal is the portable form here.
-		outputs: `={{(${configuredOutputs})($parameter)}}`,
+		outputs: RUNNER_OUTPUTS,
 		credentials: [
 			// Both slots render as a bare "Credential" without these — which tells
 			// nobody which one is which.
@@ -62,7 +61,31 @@ export class LoopthinkRunner implements INodeType {
 		],
 		properties: [
 			{
+				// One node, because which transport a network allows is not something
+				// a customer should have to answer by picking a different node — and
+				// everything downstream of it is identical either way.
+				displayName: 'Transport',
+				name: 'transport',
+				type: 'options',
+				noDataExpression: true,
+				default: 'polling',
+				options: [
+					{
+						name: 'Polling',
+						value: 'polling',
+						description: 'Asks for work over plain HTTPS. Works through any proxy.',
+					},
+					{
+						name: 'WebSocket',
+						value: 'websocket',
+						description:
+							'Holds one outbound connection and is pushed work the moment it is queued. No poll latency, far cheaper, but the network has to allow WebSocket upgrades.',
+					},
+				],
+			},
+			{
 				displayName: 'Poll Interval (Seconds)',
+				displayOptions: { show: { transport: ['polling'] } },
 				name: 'pollInterval',
 				type: 'number',
 				typeOptions: { minValue: 1, maxValue: 60 },
@@ -87,7 +110,13 @@ export class LoopthinkRunner implements INodeType {
 				description:
 					'Whether to emit each handled call into the workflow. Useful as an audit trail; the call is executed and answered either way.',
 			},
-			workflowToolsProperty,
+			{
+				displayName:
+					'A call this node cannot execute leaves on <b>To Answer</b>: the platform sends the tool name and the validated arguments, because the source has no address to call. Route it with a Switch on <code>{{$json.tool}}</code> and end each branch with a <b>loopthink Result</b> node. Give the Switch a fallback output too, or a tool nobody answers leaves the caller waiting for its timeout.',
+				name: 'workflowNotice',
+				type: 'notice',
+				default: '',
+			},
 			{
 				// A notice renders its displayName — `default` is not shown at all, which
 				// is easy to get backwards and leaves an empty box behind.
@@ -105,7 +134,7 @@ export class LoopthinkRunner implements INodeType {
 		const pollInterval = (this.getNodeParameter('pollInterval', 2) as number) * 1000;
 		const requestTimeout = (this.getNodeParameter('requestTimeout', 30) as number) * 1000;
 		const emitResults = this.getNodeParameter('emitResults', true) as boolean;
-		const workflowTools = toolList(this.getNodeParameter('workflowTools', ''));
+		const transport = this.getNodeParameter('transport', 'polling') as 'polling' | 'websocket';
 
 		const queueUrl = String(credentials.queueUrl || '').replace(/\/+$/, '');
 		const workspaceId = String(credentials.workspaceId);
@@ -213,33 +242,44 @@ export class LoopthinkRunner implements INodeType {
 			}
 		};
 
+		// What happens to a claimed call, whichever transport brought it. Shared so
+		// the two cannot drift into answering the same tool differently.
+		const handle = async (job: QueuedRequest): Promise<void> => {
+			if (isParamsRequest(job.request)) {
+				emitWorkflowTool(this, job, job.request);
+				return;
+			}
+			const request = job.request;
+			const result = await execute(job, request);
+			await report(job.requestId, result);
+
+			if (emitResults) {
+				emitOn(this, EXECUTED_OUTPUT, {
+					requestId: job.requestId,
+					tool: job.tool,
+					method: request.method,
+					// The queued form, with placeholders unresolved — the substituted
+					// URL can hold a secret, and this lands in n8n's execution records.
+					url: request.url,
+					status: result.status ?? null,
+					error: result.error ?? null,
+					maskingRules: (job.masking || []).length,
+					transport,
+				});
+			}
+		};
+
+		if (transport === 'websocket') {
+			const socket = await startSocket(this, { queueUrl, workspaceId, groupId, secret, handle });
+			return { closeFunction: async () => socket.close() };
+		}
+
 		const tick = async (): Promise<void> => {
 			if (stopped) return;
 			try {
 				const job = await claim();
 				if (job) {
-					if (isParamsRequest(job.request)) {
-						await handOverToBranch(this, workflowTools, job, job.request, report);
-					} else {
-						const request = job.request;
-						const result = await execute(job, request);
-						await report(job.requestId, result);
-
-						if (emitResults) {
-							emitOn(this, outputCount(workflowTools), 0, {
-								requestId: job.requestId,
-								tool: job.tool,
-								method: request.method,
-								// The queued form, with placeholders unresolved — the
-								// substituted URL can hold a secret, and this lands in
-								// n8n's execution records.
-								url: request.url,
-								status: result.status ?? null,
-								error: result.error ?? null,
-								maskingRules: (job.masking || []).length,
-							});
-						}
-					}
+					await handle(job);
 
 					// Work tends to arrive in bursts — go straight back for more
 					// instead of sleeping out the interval between two calls.

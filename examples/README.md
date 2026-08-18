@@ -1,23 +1,45 @@
 # Example workflows
 
-Two workflows answering the same shape of tool — an `index` and a `show` — over
-two different sources. Both were run end to end against a loopthink stage
+Three workflows answering the same pair of tools, an `index` and a `show`, over
+three different sources. All three were run end to end against a loopthink stage
 environment before being exported.
 
-| | [data-table.json](data-table.json) | [postgres.json](postgres.json) |
-|---|---|---|
-| Source | n8n Data Table | Postgres |
-| Who filters, sorts, pages | loopthink Page | the database |
-| loopthink Page does | everything | the envelope and the column trim |
+They share one shape:
+
+```
+[loopthink Runner] ─ Executed ─────────────────────────► (audit trail)
+                   └ To Answer → [Switch on {{$json.tool}}]
+                                    ├ …_index → read → [loopthink: Build Index Page] ─┐
+                                    ├ …_show  → read ──────────────────────────────────┤
+                                    └ unhandled ───────────────────────────────────────┤
+                                                            [loopthink: Send Result] ◄─┘
+```
+
+The runner does not know which tools this workflow answers. It emits every
+workflow tool on **To Answer** and the Switch decides, with the names where you
+can read them.
+
+| | [data-table.json](data-table.json) | [postgres.json](postgres.json) | [http-api.json](http-api.json) |
+|---|---|---|---|
+| Source | n8n Data Table | Postgres | any HTTP API |
+| Sorting | the Data Table node | `ORDER BY` | Build Index Page |
+| Fixed filters | the Data Table node | `WHERE` | Build Index Page |
+| Optional date bounds | Build Index Page | `WHERE`, cast so `NULL` drops out | Build Index Page |
+| Paging, envelope, field trim | Build Index Page | `LIMIT/OFFSET` + `count(*) OVER ()`, envelope from Build Index Page | Build Index Page |
+
+**Let the source do what it does well.** A database filters, orders and pages
+better than any node can, and on a table of real size it is the only place that
+scales — there, Build Index Page runs with *Rows Are Already Paged* and only
+shapes the answer. A Data Table sorts and filters natively too; what it cannot do
+is leave a filter out, page from an offset, or count the total.
 
 ## Import
 
-1. Replace the placeholders: `<LOOPTHINK_CREDENTIAL_ID>`, and
-   `<DATA_TABLE_ID>` or `<POSTGRES_CREDENTIAL_ID>`. Easiest is to import first
-   and pick the credential and table from the dropdowns in the editor.
+1. Replace the placeholders: `<LOOPTHINK_CREDENTIAL_ID>` plus `<DATA_TABLE_ID>`,
+   `<POSTGRES_CREDENTIAL_ID>` or `<API_BASE_URL>`. Easiest is to import first and
+   pick the credential and table from the dropdowns in the editor.
 2. Create the tools in loopthink with **Implementation: Workflow** and the
-   parameters below. The tool name is the contract: it has to match the entry
-   under **Workflow Tools** on the runner node.
+   parameters below. The tool name is the contract: it has to match the Switch.
 3. Activate the workflow. It polls only while active — *Test workflow* listens
    for a short window and stops.
 
@@ -42,9 +64,9 @@ country and the creation date — deliberately not the whole record.
 
 `*_show` takes a required `id` and returns the full record.
 
-Masking rules used in both: `iban` → mask, email pattern → pseudonymize. They are
-configured in loopthink and travel with each request, so changing them needs no
-change here.
+Masking rules used throughout: `iban` → mask, email pattern → pseudonymize. They
+are configured in loopthink and travel with each request, so changing them needs
+no change here.
 
 ## Why an index is not just a smaller list
 
@@ -53,24 +75,31 @@ its way through; omitting the field means there is nothing to protect. A model
 that needs the email asks `*_show` for one record, and that single call is the
 one that carries it.
 
-## Postgres specifics
+## Notes per source
 
-The query does the work, which is the only thing that scales past a toy table:
+**n8n Data Table.** Sorting goes in the node (*Order By*). Fixed filters can too:
+the node converts an ISO string to a real Date for date columns, so a date
+condition is correct. An *optional* bound cannot: leaving the value empty fails
+with `Invalid date string ''`, so bounds driven by a tool parameter stay in Build
+Index Page, where an empty bound is simply not applied.
+
+**Postgres.** Two details that are easy to get wrong:
 
 ```sql
-SELECT id, name, country, created_at, updated_at, count(*) OVER () AS total
-FROM customers
 WHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
-  ...
 ORDER BY created_at DESC, id DESC
 LIMIT $5 OFFSET $6
 ```
 
-Two details that are easy to get wrong:
+Bounds are parameters and are cast, so an absent one is a real `NULL` and the
+predicate drops out; passing `''` instead fails the cast. And the sort direction
+cannot be a parameter, so it is interpolated — from an expression that can only
+ever produce `ASC` or `DESC`, a whitelist by construction. Never interpolate the
+raw tool parameter there.
 
-- **Bounds are parameters and are cast.** An absent one is a real `NULL` and the
-  predicate drops out. Passing `''` instead fails the cast, which is the usual
-  way an optional date filter breaks.
-- **Sort direction cannot be a parameter.** It is interpolated, and the
-  expression can only ever produce `ASC` or `DESC` — a whitelist by construction.
-  Never interpolate the raw tool parameter there.
+**HTTP API.** Use this when the platform cannot describe the call on its own: a
+body to assemble, a response to reshape, a call to make first. A plain GET
+against a documented path needs none of it — author that in loopthink as an HTTP
+tool and the runner issues it with no workflow at all. Credentials for your own
+API stay in n8n, on the HTTP Request node. Verified against a public JSON list
+API standing in for a customer's own.

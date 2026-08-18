@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-loopthink",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Run loopthink MCP tools from inside your own network. The node reaches out to loopthink, claims tool calls, executes them against your internal HTTP APIs and returns masked results \u2014 no inbound connection required.",
   "keywords": [
     "n8n-community-node-package",
@@ -45,9 +45,7 @@
     ],
     "nodes": [
       "dist/nodes/LoopthinkRunner/LoopthinkRunner.node.js",
-      "dist/nodes/LoopthinkRunnerWs/LoopthinkRunnerWs.node.js",
-      "dist/nodes/LoopthinkPage/LoopthinkPage.node.js",
-      "dist/nodes/LoopthinkResult/LoopthinkResult.node.js"
+      "dist/nodes/Loopthink/Loopthink.node.js"
     ]
   },
   "devDependencies": {

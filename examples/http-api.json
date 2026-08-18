@@ -1,5 +1,5 @@
 {
-  "name": "loopthink Runner \u2014 Postgres",
+  "name": "loopthink Runner \u2014 internal HTTP API",
   "nodes": [
     {
       "parameters": {
@@ -39,7 +39,7 @@
                   {
                     "id": "r0",
                     "leftValue": "={{ $json.tool }}",
-                    "rightValue": "pg_customers_index",
+                    "rightValue": "api_customers_index",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -49,7 +49,7 @@
                 "combinator": "and"
               },
               "renameOutput": true,
-              "outputKey": "pg_customers_index"
+              "outputKey": "api_customers_index"
             },
             {
               "conditions": {
@@ -63,7 +63,7 @@
                   {
                     "id": "r1",
                     "leftValue": "={{ $json.tool }}",
-                    "rightValue": "pg_customers_show",
+                    "rightValue": "api_customers_show",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -73,7 +73,7 @@
                 "combinator": "and"
               },
               "renameOutput": true,
-              "outputKey": "pg_customers_show"
+              "outputKey": "api_customers_show"
             }
           ]
         },
@@ -93,35 +93,45 @@
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "=SELECT id, name, country, created_at, updated_at, count(*) OVER () AS total\nFROM customers\nWHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)\n  AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)\n  AND ($3::timestamptz IS NULL OR updated_at >= $3::timestamptz)\n  AND ($4::timestamptz IS NULL OR updated_at <= $4::timestamptz)\nORDER BY created_at {{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'ASC' : 'DESC' }}, id {{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'ASC' : 'DESC' }}\nLIMIT $5 OFFSET $6",
+        "method": "GET",
+        "url": "=<API_BASE_URL>/customers",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "={{ JSON.stringify({ country: $json.params.country || undefined }) }}",
         "options": {
-          "queryReplacement": "={{ [ $json.params.created_after || null, $json.params.created_before || null, $json.params.updated_after || null, $json.params.updated_before || null, $json.params.limit || 20, $json.params.offset || 0 ] }}"
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
         }
       },
-      "id": "query-customers",
-      "name": "Query customers",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.7,
+      "id": "call-api-list",
+      "name": "Call API: list",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
       "position": [
         -140,
         -160
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "<POSTGRES_CREDENTIAL_ID>",
-          "name": "CRM Postgres"
-        }
-      }
+      ]
     },
     {
       "parameters": {
         "operation": "page",
-        "alreadyPaged": true,
-        "totalField": "total",
+        "sortBy": "createdAt",
+        "sortDirection": "={{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'asc' : 'desc' }}",
         "offset": "={{ $('loopthink Runner').first().json.params.offset || 0 }}",
         "limit": "={{ $('loopthink Runner').first().json.params.limit || 20 }}",
-        "fields": "id, name, country, created_at"
+        "fields": "id, name, country, createdAt",
+        "dateFilters": {
+          "filters": [
+            {
+              "field": "createdAt",
+              "from": "={{ $('loopthink Runner').first().json.params.created_after || '' }}",
+              "to": "={{ $('loopthink Runner').first().json.params.created_before || '' }}"
+            }
+          ]
+        }
       },
       "id": "page",
       "name": "Page",
@@ -134,26 +144,24 @@
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "=SELECT id, name, email, iban, country, revenue, created_at, updated_at\nFROM customers\nWHERE id = $1",
+        "method": "GET",
+        "url": "=<API_BASE_URL>/customers/{{ $('loopthink Runner').first().json.params.id }}",
         "options": {
-          "queryReplacement": "={{ [ $json.params.id ] }}"
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
         }
       },
-      "id": "query-one-customer",
-      "name": "Query one customer",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.7,
+      "id": "call-api-one",
+      "name": "Call API: one",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
       "position": [
         -140,
         100
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "<POSTGRES_CREDENTIAL_ID>",
-          "name": "CRM Postgres"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -239,14 +247,14 @@
       "main": [
         [
           {
-            "node": "Query customers",
+            "node": "Call API: list",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Query one customer",
+            "node": "Call API: one",
             "type": "main",
             "index": 0
           }
@@ -260,7 +268,7 @@
         ]
       ]
     },
-    "Query customers": {
+    "Call API: list": {
       "main": [
         [
           {
@@ -282,7 +290,7 @@
         ]
       ]
     },
-    "Query one customer": {
+    "Call API: one": {
       "main": [
         [
           {

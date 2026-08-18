@@ -1,27 +1,95 @@
 {
-  "name": "Loopthink Runner — customers",
+  "name": "loopthink Runner \u2014 n8n Data Table",
   "nodes": [
     {
       "parameters": {
+        "transport": "polling",
         "pollInterval": 2,
         "requestTimeout": 30,
-        "emitResults": true,
-        "workflowTools": "dt_customers_index, dt_customers_show"
+        "emitResults": true
       },
       "id": "loopthink-runner",
       "name": "loopthink Runner",
       "type": "n8n-nodes-loopthink.loopthinkRunner",
       "typeVersion": 1,
       "position": [
-        -380,
+        -620,
         0
       ],
       "credentials": {
         "loopthinkRunnerApi": {
           "id": "<LOOPTHINK_CREDENTIAL_ID>",
-          "name": "Loopthink Runner (stage)"
+          "name": "Loopthink Runner"
         }
       }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r0",
+                    "leftValue": "={{ $json.tool }}",
+                    "rightValue": "dt_customers_index",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "dt_customers_index"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.tool }}",
+                    "rightValue": "dt_customers_show",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "dt_customers_show"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "unhandled"
+        }
+      },
+      "id": "route-by-tool",
+      "name": "Route by tool",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -380,
+        60
+      ]
     },
     {
       "parameters": {
@@ -32,20 +100,24 @@
           "value": "<DATA_TABLE_ID>",
           "cachedResultName": "customers"
         },
-        "options": {},
-        "returnAll": true
+        "returnAll": true,
+        "orderBy": true,
+        "orderByColumn": "createdAt",
+        "orderByDirection": "={{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'ASC' : 'DESC' }}",
+        "options": {}
       },
       "id": "read-customers",
       "name": "Read customers",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -120,
-        -140
+        -140,
+        -160
       ]
     },
     {
       "parameters": {
+        "operation": "page",
         "sortBy": "createdAt",
         "sortDirection": "={{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'asc' : 'desc' }}",
         "offset": "={{ $('loopthink Runner').first().json.params.offset || 0 }}",
@@ -68,11 +140,11 @@
       },
       "id": "page",
       "name": "Page",
-      "type": "n8n-nodes-loopthink.loopthinkPage",
+      "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        140,
-        -140
+        120,
+        -160
       ]
     },
     {
@@ -84,7 +156,6 @@
           "value": "<DATA_TABLE_ID>",
           "cachedResultName": "customers"
         },
-        "options": {},
         "matchType": "allConditions",
         "filters": {
           "conditions": [
@@ -96,56 +167,81 @@
           ]
         },
         "returnAll": false,
-        "limit": 1
+        "limit": 1,
+        "options": {}
       },
       "id": "read-one-customer",
       "name": "Read one customer",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -120,
-        120
+        -140,
+        100
       ]
     },
     {
       "parameters": {
+        "operation": "result",
         "request": "={{ $('loopthink Runner').first().json }}",
         "respondWith": "object",
         "status": 200
       },
       "id": "answer-index",
       "name": "Answer index",
-      "type": "n8n-nodes-loopthink.loopthinkResult",
+      "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        400,
-        -140
+        380,
+        -160
       ],
       "credentials": {
         "loopthinkRunnerApi": {
           "id": "<LOOPTHINK_CREDENTIAL_ID>",
-          "name": "Loopthink Runner (stage)"
+          "name": "Loopthink Runner"
         }
       }
     },
     {
       "parameters": {
+        "operation": "result",
         "request": "={{ $('loopthink Runner').first().json }}",
         "respondWith": "object",
         "status": 200
       },
       "id": "answer-show",
       "name": "Answer show",
-      "type": "n8n-nodes-loopthink.loopthinkResult",
+      "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        400,
-        120
+        380,
+        100
       ],
       "credentials": {
         "loopthinkRunnerApi": {
           "id": "<LOOPTHINK_CREDENTIAL_ID>",
-          "name": "Loopthink Runner (stage)"
+          "name": "Loopthink Runner"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "result",
+        "request": "={{ $('loopthink Runner').first().json }}",
+        "respondWith": "error",
+        "error": "={{ 'No branch for tool \\\"' + $('loopthink Runner').first().json.tool + '\\\"' }}"
+      },
+      "id": "answer-unhandled",
+      "name": "Answer unhandled",
+      "type": "n8n-nodes-loopthink.loopthink",
+      "typeVersion": 1,
+      "position": [
+        380,
+        320
+      ],
+      "credentials": {
+        "loopthinkRunnerApi": {
+          "id": "<LOOPTHINK_CREDENTIAL_ID>",
+          "name": "Loopthink Runner"
         }
       }
     }
@@ -156,6 +252,17 @@
         [],
         [
           {
+            "node": "Route by tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by tool": {
+      "main": [
+        [
+          {
             "node": "Read customers",
             "type": "main",
             "index": 0
@@ -164,6 +271,13 @@
         [
           {
             "node": "Read one customer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer unhandled",
             "type": "main",
             "index": 0
           }
