@@ -1,0 +1,192 @@
+{
+  "name": "Loopthink Runner — Postgres customers",
+  "nodes": [
+    {
+      "parameters": {
+        "pollInterval": 2,
+        "requestTimeout": 30,
+        "emitResults": true,
+        "workflowTools": "pg_customers_index, pg_customers_show"
+      },
+      "id": "loopthink-runner",
+      "name": "loopthink Runner",
+      "type": "n8n-nodes-loopthink.loopthinkRunner",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        0
+      ],
+      "credentials": {
+        "loopthinkRunnerApi": {
+          "id": "<LOOPTHINK_CREDENTIAL_ID>",
+          "name": "Loopthink Runner (Postgres CRM)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT id, name, country, created_at, updated_at, count(*) OVER () AS total\nFROM customers\nWHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)\n  AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)\n  AND ($3::timestamptz IS NULL OR updated_at >= $3::timestamptz)\n  AND ($4::timestamptz IS NULL OR updated_at <= $4::timestamptz)\nORDER BY created_at {{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'ASC' : 'DESC' }}, id {{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'ASC' : 'DESC' }}\nLIMIT $5 OFFSET $6",
+        "options": {
+          "queryReplacement": "={{ [ $json.params.created_after || null, $json.params.created_before || null, $json.params.updated_after || null, $json.params.updated_before || null, $json.params.limit || 20, $json.params.offset || 0 ] }}"
+        }
+      },
+      "id": "query-customers",
+      "name": "Query customers",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -140,
+        -140
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "<POSTGRES_CREDENTIAL_ID>",
+          "name": "CRM Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "alreadyPaged": true,
+        "totalField": "total",
+        "offset": "={{ $('loopthink Runner').first().json.params.offset || 0 }}",
+        "limit": "={{ $('loopthink Runner').first().json.params.limit || 20 }}",
+        "fields": "id, name, country, created_at"
+      },
+      "id": "page",
+      "name": "Page",
+      "type": "n8n-nodes-loopthink.loopthinkPage",
+      "typeVersion": 1,
+      "position": [
+        140,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT id, name, email, iban, country, revenue, created_at, updated_at\nFROM customers\nWHERE id = $1",
+        "options": {
+          "queryReplacement": "={{ [ $json.params.id ] }}"
+        }
+      },
+      "id": "query-one-customer",
+      "name": "Query one customer",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -140,
+        120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "<POSTGRES_CREDENTIAL_ID>",
+          "name": "CRM Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "request": "={{ $('loopthink Runner').first().json }}",
+        "respondWith": "object",
+        "status": 200
+      },
+      "id": "answer-index",
+      "name": "Answer index",
+      "type": "n8n-nodes-loopthink.loopthinkResult",
+      "typeVersion": 1,
+      "position": [
+        420,
+        -140
+      ],
+      "credentials": {
+        "loopthinkRunnerApi": {
+          "id": "<LOOPTHINK_CREDENTIAL_ID>",
+          "name": "Loopthink Runner (Postgres CRM)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "request": "={{ $('loopthink Runner').first().json }}",
+        "respondWith": "object",
+        "status": 200
+      },
+      "id": "answer-show",
+      "name": "Answer show",
+      "type": "n8n-nodes-loopthink.loopthinkResult",
+      "typeVersion": 1,
+      "position": [
+        420,
+        120
+      ],
+      "credentials": {
+        "loopthinkRunnerApi": {
+          "id": "<LOOPTHINK_CREDENTIAL_ID>",
+          "name": "Loopthink Runner (Postgres CRM)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "loopthink Runner": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Query customers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query one customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query customers": {
+      "main": [
+        [
+          {
+            "node": "Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Page": {
+      "main": [
+        [
+          {
+            "node": "Answer index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query one customer": {
+      "main": [
+        [
+          {
+            "node": "Answer show",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true,
+    "executionOrder": "v1"
+  }
+}

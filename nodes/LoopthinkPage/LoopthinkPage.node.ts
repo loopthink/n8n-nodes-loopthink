@@ -59,10 +59,32 @@ export class LoopthinkPage implements INodeType {
 		outputs: ['main'],
 		properties: [
 			{
+				// A database does filtering, ordering and LIMIT/OFFSET better than any
+				// node can, and on a table of real size it is the only workable place
+				// for them. What it does not produce is the envelope, so the node still
+				// earns its place in that branch — it just stops re-doing the work.
+				displayName: 'Rows Are Already Paged',
+				name: 'alreadyPaged',
+				type: 'boolean',
+				default: false,
+				description:
+					'Whether the source already applied the filters, order and page. Turn this on for SQL and read the row count from a column instead.',
+			},
+			{
+				displayName: 'Total Field',
+				name: 'totalField',
+				type: 'string',
+				default: 'total',
+				displayOptions: { show: { alreadyPaged: [true] } },
+				description:
+					'Column carrying the unpaged row count, e.g. from count(*) OVER () in the query. It is removed from the returned rows.',
+			},
+			{
 				displayName: 'Sort By',
 				name: 'sortBy',
 				type: 'string',
 				default: 'createdAt',
+				displayOptions: { show: { alreadyPaged: [false] } },
 				description: 'Field to order on. Rows missing it keep their incoming order, at the end.',
 			},
 			{
@@ -70,6 +92,7 @@ export class LoopthinkPage implements INodeType {
 				name: 'sortDirection',
 				type: 'options',
 				default: 'desc',
+				displayOptions: { show: { alreadyPaged: [false] } },
 				options: [
 					{ name: 'Newest First', value: 'desc' },
 					{ name: 'Oldest First', value: 'asc' },
@@ -109,6 +132,7 @@ export class LoopthinkPage implements INodeType {
 				type: 'fixedCollection',
 				typeOptions: { multipleValues: true },
 				default: {},
+				displayOptions: { show: { alreadyPaged: [false] } },
 				placeholder: 'Add Date Filter',
 				description: 'Optional. A bound left empty is simply not applied, so an absent tool parameter needs no branching.',
 				options: [
@@ -146,6 +170,7 @@ export class LoopthinkPage implements INodeType {
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const rows = this.getInputData().map((item) => item.json as IDataObject);
 
+		const alreadyPaged = this.getNodeParameter('alreadyPaged', 0, false) as boolean;
 		const sortBy = this.getNodeParameter('sortBy', 0, 'createdAt') as string;
 		const direction = this.getNodeParameter('sortDirection', 0, 'desc') as 'asc' | 'desc';
 		const offset = Math.max(0, Number(this.getNodeParameter('offset', 0, 0)) || 0);
@@ -153,6 +178,31 @@ export class LoopthinkPage implements INodeType {
 		const fields = fieldList(this.getNodeParameter('fields', 0, ''));
 		const filters = ((this.getNodeParameter('dateFilters', 0, {}) as IDataObject).filters ??
 			[]) as RangeFilter[];
+
+		const project = (row: IDataObject): IDataObject => {
+			if (fields.length === 0) return row;
+			const trimmed: IDataObject = {};
+			for (const field of fields) {
+				if (field in row) trimmed[field] = row[field];
+			}
+			return trimmed;
+		};
+
+		if (alreadyPaged) {
+			const totalField = this.getNodeParameter('totalField', 0, 'total') as string;
+			// From the first row, because count(*) OVER () repeats it on every one.
+			// Absent (an empty page) means there is nothing beyond what arrived.
+			const total = Number(rows[0]?.[totalField] ?? rows.length);
+			const page = rows.map((row) => {
+				const { [totalField]: _dropped, ...rest } = row;
+				return project(rest as IDataObject);
+			});
+			return [
+				this.helpers.returnJsonArray([
+					{ items: page, total, offset, limit, hasMore: offset + page.length < total },
+				]),
+			];
+		}
 
 		const matches = (row: IDataObject): boolean =>
 			filters.every((filter) => {
@@ -183,14 +233,7 @@ export class LoopthinkPage implements INodeType {
 			})
 			.map(({ row }) => row);
 
-		const page = ordered.slice(offset, offset + limit).map((row) => {
-			if (fields.length === 0) return row;
-			const trimmed: IDataObject = {};
-			for (const field of fields) {
-				if (field in row) trimmed[field] = row[field];
-			}
-			return trimmed;
-		});
+		const page = ordered.slice(offset, offset + limit).map(project);
 
 		return [
 			this.helpers.returnJsonArray([

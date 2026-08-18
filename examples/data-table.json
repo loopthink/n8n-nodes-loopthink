@@ -1,0 +1,213 @@
+{
+  "name": "Loopthink Runner — customers",
+  "nodes": [
+    {
+      "parameters": {
+        "pollInterval": 2,
+        "requestTimeout": 30,
+        "emitResults": true,
+        "workflowTools": "dt_customers_index, dt_customers_show"
+      },
+      "id": "loopthink-runner",
+      "name": "loopthink Runner",
+      "type": "n8n-nodes-loopthink.loopthinkRunner",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        0
+      ],
+      "credentials": {
+        "loopthinkRunnerApi": {
+          "id": "<LOOPTHINK_CREDENTIAL_ID>",
+          "name": "Loopthink Runner (stage)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "<DATA_TABLE_ID>",
+          "cachedResultName": "customers"
+        },
+        "options": {},
+        "returnAll": true
+      },
+      "id": "read-customers",
+      "name": "Read customers",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -120,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "sortBy": "createdAt",
+        "sortDirection": "={{ $('loopthink Runner').first().json.params.sort === 'oldest' ? 'asc' : 'desc' }}",
+        "offset": "={{ $('loopthink Runner').first().json.params.offset || 0 }}",
+        "limit": "={{ $('loopthink Runner').first().json.params.limit || 20 }}",
+        "fields": "id, name, country, createdAt",
+        "dateFilters": {
+          "filters": [
+            {
+              "field": "createdAt",
+              "from": "={{ $('loopthink Runner').first().json.params.created_after || '' }}",
+              "to": "={{ $('loopthink Runner').first().json.params.created_before || '' }}"
+            },
+            {
+              "field": "updatedAt",
+              "from": "={{ $('loopthink Runner').first().json.params.updated_after || '' }}",
+              "to": "={{ $('loopthink Runner').first().json.params.updated_before || '' }}"
+            }
+          ]
+        }
+      },
+      "id": "page",
+      "name": "Page",
+      "type": "n8n-nodes-loopthink.loopthinkPage",
+      "typeVersion": 1,
+      "position": [
+        140,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "<DATA_TABLE_ID>",
+          "cachedResultName": "customers"
+        },
+        "options": {},
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('loopthink Runner').first().json.params.id }}"
+            }
+          ]
+        },
+        "returnAll": false,
+        "limit": 1
+      },
+      "id": "read-one-customer",
+      "name": "Read one customer",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -120,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "request": "={{ $('loopthink Runner').first().json }}",
+        "respondWith": "object",
+        "status": 200
+      },
+      "id": "answer-index",
+      "name": "Answer index",
+      "type": "n8n-nodes-loopthink.loopthinkResult",
+      "typeVersion": 1,
+      "position": [
+        400,
+        -140
+      ],
+      "credentials": {
+        "loopthinkRunnerApi": {
+          "id": "<LOOPTHINK_CREDENTIAL_ID>",
+          "name": "Loopthink Runner (stage)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "request": "={{ $('loopthink Runner').first().json }}",
+        "respondWith": "object",
+        "status": 200
+      },
+      "id": "answer-show",
+      "name": "Answer show",
+      "type": "n8n-nodes-loopthink.loopthinkResult",
+      "typeVersion": 1,
+      "position": [
+        400,
+        120
+      ],
+      "credentials": {
+        "loopthinkRunnerApi": {
+          "id": "<LOOPTHINK_CREDENTIAL_ID>",
+          "name": "Loopthink Runner (stage)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "loopthink Runner": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Read customers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read one customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read customers": {
+      "main": [
+        [
+          {
+            "node": "Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Page": {
+      "main": [
+        [
+          {
+            "node": "Answer index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read one customer": {
+      "main": [
+        [
+          {
+            "node": "Answer show",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true,
+    "executionOrder": "v1"
+  }
+}

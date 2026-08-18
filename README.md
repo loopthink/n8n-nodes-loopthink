@@ -17,6 +17,22 @@ Claude ──► loopthink ──► queue ──┐
                           masked result ──► loopthink ──► Claude
 ```
 
+## Two kinds of tool
+
+**HTTP tools** the node executes itself: loopthink resolves the whole call and
+the runner issues it. Nothing else is needed.
+
+**Workflow tools** the node cannot execute, and is not meant to. Their source has
+no address to call — an n8n Data Table, a Sheet, a database, any node-only
+integration — so loopthink sends the validated arguments and *your workflow*
+answers. Name them under **Workflow Tools** on the runner node and each gets an
+output of its own, labelled with the tool name; end that branch with a
+**loopthink Result** node. A tool that arrives but is not listed is answered with
+a clean error rather than left to time out.
+
+See [examples/](examples) for two working workflows, one over an n8n Data Table
+and one over Postgres.
+
 ## Two nodes, one runner
 
 | | **loopthink Runner** | **loopthink Runner (WebSocket)** |
@@ -93,6 +109,30 @@ between. Sometimes an API leaves no choice — but prefer a header where you hav
 - **Transient failures do not stop it.** A failed poll is logged and retried;
   stopping would leave the runner silently dead until someone noticed.
 
+## The other two nodes
+
+**loopthink Result** ends a workflow-tool branch: it masks the answer and sends
+it back. Masking is not a setting on it. The only way to answer a call is through
+this node, so an unmasked result is not something a workflow can send by
+forgetting a step.
+
+**loopthink Page** turns rows into one page of an index. Three things a listing
+needs that the source often gets wrong or does not offer:
+
+- **Date ranges that are actually dates.** n8n's Data Table compares filter values
+  as strings against a stored `YYYY-MM-DD HH:MM:SS.mmm`, so a bound written as
+  `2026-08-18T00:00:00Z` sorts *after* every row from that day: the `T` outranks
+  the space. It matches nothing and looks like an empty table.
+- **Offset paging.** The Data Table node has a limit and no offset, so a second
+  page cannot be expressed with it at all.
+- **Fewer fields.** An index should not ship whole records. Masking protects a
+  value that travels; leaving the field out means it never does.
+
+Against a real database, turn on **Rows Are Already Paged** and let SQL do the
+filtering, ordering and `LIMIT/OFFSET` — the node then only builds the envelope
+(`items`, `total`, `offset`, `limit`, `hasMore`) and trims the columns. Read the
+row count from `count(*) OVER ()`.
+
 ## Masking
 
 Masking runs **here**, before anything travels back — only masked data ever passes
@@ -108,8 +148,11 @@ for HTTP tools **without** a scope, or it will silently do nothing.
 
 ## Scope
 
-This release covers **HTTP tools**. Database, HubSpot and Salesforce importers are
-not executed by this node yet.
+HTTP tools are executed by the node; anything else is a workflow tool your own
+branch answers. HubSpot and Salesforce importers are not executed here.
+
+The WebSocket node does not route workflow tools yet — use the polling node for
+those.
 
 ## Develop
 
@@ -118,6 +161,19 @@ npm install
 npm test
 npm run build
 ```
+
+A local rig with n8n, an echo service and a seeded Postgres:
+
+```bash
+npm run docker:up      # http://127.0.0.1:5680
+npm run docker:logs
+npm run docker:down    # also drops the volumes, which is what makes Postgres re-seed
+```
+
+The package is mounted into the container, so `npm run build` is picked up. Node
+*descriptions* are read at startup, though: after adding or renaming a parameter,
+restart n8n or the old description keeps being served and the new parameter
+silently reads as its default.
 
 ### Local test rig
 

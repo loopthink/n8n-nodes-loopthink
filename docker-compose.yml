@@ -62,6 +62,7 @@ services:
       - .:/custom/n8n-nodes-loopthink:ro
     depends_on:
       - echo
+      - postgres
 
   # Stands in for the customer's internal API. Echoes whatever it receives, so
   # you can watch masking work on a payload you control: POST the fields you want
@@ -75,5 +76,23 @@ services:
     # network at http://echo:8080, and binding it outside would collide with
     # whatever else already holds 8080 without buying anything.
 
+  # Stands in for a customer's own database, for the Postgres example workflow.
+  # Seeded once on first start from ./seed; `docker compose down -v` is what
+  # makes it re-seed, since the entrypoint only runs the scripts on an empty
+  # data directory.
+  postgres:
+    image: postgres:17-alpine
+    container_name: loopthink-postgres
+    environment:
+      POSTGRES_USER: loopthink
+      POSTGRES_PASSWORD: loopthink
+      POSTGRES_DB: crm
+    # Not published either: n8n reaches it at postgres:5432 over the compose
+    # network, and 5432 on the host is very likely already taken.
+    volumes:
+      - ./seed:/docker-entrypoint-initdb.d:ro
+      - pg_data:/var/lib/postgresql/data
+
 volumes:
   n8n_data:
+  pg_data:
