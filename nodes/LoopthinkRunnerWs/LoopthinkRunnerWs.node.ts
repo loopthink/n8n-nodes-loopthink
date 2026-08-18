@@ -8,8 +8,19 @@ import type {
 import { NodeOperationError } from 'n8n-workflow';
 import WebSocket from 'ws';
 
-import { applyMasking, rulesForScope, type MaskingRule } from '../LoopthinkRunner/masking';
+import { applyMasking, rulesForScope } from '../LoopthinkRunner/masking';
 import { MissingSecretError, secretsFromCredential, substituteSecrets } from '../LoopthinkRunner/secrets';
+import {
+	configuredOutputs,
+	handOverToBranch,
+	emitOn,
+	isParamsRequest,
+	outputCount,
+	toolList,
+	workflowToolsProperty,
+	type HttpPayload,
+	type QueuedRequest,
+} from '../LoopthinkRunner/workflowTools';
 
 /**
  * loopthink Runner (WebSocket) — the same runner, told instead of asking.
@@ -27,24 +38,12 @@ import { MissingSecretError, secretsFromCredential, substituteSecrets } from '..
  * network; nothing has to reach this n8n.
  */
 
-interface QueuedRequest {
-	requestId: string;
-	tool: string;
-	request: {
-		method: string;
-		url: string;
-		query?: Record<string, string>;
-		headers?: Record<string, string>;
-		body?: unknown;
-	};
-	masking: MaskingRule[];
-	scope?: string;
-	leaseUntil: number;
-}
-
-// API Gateway drops an idle connection after 10 minutes, so something has to
-// travel before then. Well inside it, to survive a missed beat.
-const PING_INTERVAL_MS = 4 * 60 * 1000;
+// Two deadlines, and the shorter one wins. API Gateway drops an idle connection
+// after 10 minutes; the runner's own heartbeat in loopthink expires after 90
+// seconds, and on this transport a ping is the only thing that refreshes it.
+// Pinging every four minutes kept the socket alive and let the runner read as
+// offline in between.
+const PING_INTERVAL_MS = 60 * 1000;
 
 // Reconnect backoff. Starts quick because most drops are momentary, and gives up
 // climbing at a minute so a longer outage does not turn into a silent runner.
@@ -64,7 +63,7 @@ export class LoopthinkRunnerWs implements INodeType {
 		description: 'Executes loopthink MCP tool calls, pushed over a WebSocket instead of polled',
 		defaults: { name: 'loopthink Runner (WebSocket)' },
 		inputs: [],
-		outputs: ['main'],
+		outputs: `={{(${configuredOutputs})($parameter)}}`,
 		credentials: [
 			{ name: 'loopthinkRunnerApi', required: true, displayName: 'Authentication' },
 			{ name: 'loopthinkTargetApi', required: false, displayName: 'Secrets' },
@@ -86,6 +85,7 @@ export class LoopthinkRunnerWs implements INodeType {
 				description:
 					'Whether to emit each handled call into the workflow. Useful as an audit trail; the call is executed and answered either way.',
 			},
+			workflowToolsProperty,
 			{
 				displayName:
 					'Work is pushed the moment it is queued, so there is no poll interval and no latency from one. Requires a Queue URL whose host speaks WebSocket. If your network only allows plain HTTPS, use the polling <b>loopthink Runner</b> node instead.',
@@ -100,6 +100,7 @@ export class LoopthinkRunnerWs implements INodeType {
 		const credentials = await this.getCredentials('loopthinkRunnerApi');
 		const requestTimeout = (this.getNodeParameter('requestTimeout', 30) as number) * 1000;
 		const emitResults = this.getNodeParameter('emitResults', true) as boolean;
+		const workflowTools = toolList(this.getNodeParameter('workflowTools', ''));
 
 		const queueUrl = String(credentials.queueUrl || '').replace(/\/+$/, '');
 		const workspaceId = String(credentials.workspaceId || '');
@@ -167,9 +168,9 @@ export class LoopthinkRunnerWs implements INodeType {
 			});
 		};
 
-		const execute = async (job: QueuedRequest): Promise<IDataObject> => {
+		const execute = async (job: QueuedRequest, request: HttpPayload): Promise<IDataObject> => {
 			try {
-				const resolved = substituteSecrets(job.request, secrets);
+				const resolved = substituteSecrets(request, secrets);
 
 				// Assembled after substitution — encoding first would hide a
 				// {{secret.NAME}} behind %7B%7B…%7D%7D and send it unresolved.
@@ -203,25 +204,30 @@ export class LoopthinkRunnerWs implements INodeType {
 		};
 
 		const handle = async (job: QueuedRequest): Promise<void> => {
-			const result = await execute(job);
+			// A workflow tool is handed to its branch and answered from there, exactly
+			// as on the polling transport. The two are meant to be interchangeable, so
+			// which one a customer's network allows must not change what a tool does.
+			if (isParamsRequest(job.request)) {
+				await handOverToBranch(this, workflowTools, job, job.request, report);
+				return;
+			}
+
+			const request = job.request;
+			const result = await execute(job, request);
 			await report(job.requestId, result);
 
 			if (emitResults) {
-				this.emit([
-					this.helpers.returnJsonArray([
-						{
-							requestId: job.requestId,
-							tool: job.tool,
-							method: job.request.method,
-							// The queued form, placeholders unresolved: a substituted URL
-							// can hold a secret, and n8n stores execution data.
-							url: job.request.url,
-							status: result.status ?? null,
-							error: result.error ?? null,
-							transport: 'websocket',
-						},
-					]),
-				]);
+				emitOn(this, outputCount(workflowTools), 0, {
+					requestId: job.requestId,
+					tool: job.tool,
+					method: request.method,
+					// The queued form, placeholders unresolved: a substituted URL
+					// can hold a secret, and n8n stores execution data.
+					url: request.url,
+					status: result.status ?? null,
+					error: result.error ?? null,
+					transport: 'websocket',
+				});
 			}
 		};
 
