@@ -3,7 +3,7 @@ module.exports = {
 	env: { browser: false, es6: true, node: true },
 	parser: '@typescript-eslint/parser',
 	parserOptions: { sourceType: 'module', extraFileExtensions: ['.json'] },
-	ignorePatterns: ['.eslintrc.js', '**/*.js', '**/node_modules/**', '**/dist/**'],
+	ignorePatterns: ['.eslintrc.js', '**/*.js', '**/*.spec.ts', '**/node_modules/**', '**/dist/**'],
 	overrides: [
 		{
 			files: ['package.json'],

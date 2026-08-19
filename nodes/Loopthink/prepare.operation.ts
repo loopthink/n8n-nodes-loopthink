@@ -103,7 +103,7 @@ export const prepareFields: INodeProperties[] = [
 		typeOptions: { multipleValues: true },
 		default: {},
 		description:
-			'One entry per column the tool can pin to a value. Compare the row with "contains" — an equals row has no value that means "no filter", a wildcard does.',
+			'One entry per column the tool can pin to a value. Compare the row with "contains": an equals row has no value that means "no filter", a wildcard does.',
 		options: [
 			{
 				name: 'match',
@@ -129,8 +129,10 @@ export const prepareFields: INodeProperties[] = [
 		],
 	},
 	{
-		displayName:
-			'Every condition row in the Data Table node is filled the same way: pick the column, then set <b>Condition</b> to <code>{{ $json.q.&lt;key&gt;.condition }}</code> and <b>Value</b> to <code>{{ $json.q.&lt;key&gt;.value }}</code>. The key is the column name: <code>q.id</code> for the cursor, which is always <code>id</code> because n8n gives every data table one, <code>q.status</code> for a match — and a range needs two rows, <code>q.&lt;column&gt;_min</code> and <code>q.&lt;column&gt;_max</code>. Limit is <code>q.limit</code>, sort direction <code>q.order</code>. Every key holds a value on every call, so no row has to be removed for a parameter the model left out. <code>q.unused</code> lists parameters the tool declares that no row here reads: a filter the model was invited to send and that quietly does nothing.',
+		// q.id is a key in the emitted object, not a label; upper-casing it would
+		// name something that does not exist.
+		// eslint-disable-next-line n8n-nodes-base/node-param-display-name-miscased-id
+		displayName: 'Every condition row in the Data Table node is filled the same way: pick the column, then set <b>Condition</b> to <code>{{ $json.q.&lt;key&gt;.condition }}</code> and <b>Value</b> to <code>{{ $json.q.&lt;key&gt;.value }}</code>. The key is the column name: <code>q.id</code> for the cursor, which is always <code>id</code> because n8n gives every data table one, and <code>q.status</code> for a match. A range needs two rows, <code>q.&lt;column&gt;_min</code> and <code>q.&lt;column&gt;_max</code>. Limit is <code>q.limit</code>, sort direction <code>q.order</code>. Every key holds a value on every call, so no row has to be removed for a parameter the model left out. <code>q.unused</code> lists parameters the tool declares that no row here reads: a filter the model was invited to send and that quietly does nothing.',
 		name: 'prepareNotice',
 		type: 'notice',
 		default: '',

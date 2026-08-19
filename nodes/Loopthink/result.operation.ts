@@ -76,7 +76,7 @@ export const resultFields: INodeProperties[] = [
 				{
 					name: 'One Object',
 					value: 'object',
-					description: 'The first input item — a single record, or an envelope built by loopthink Page',
+					description: 'The first input item: a single record, or an envelope the branch built',
 				},
 				{
 					name: 'List of Objects',
@@ -87,7 +87,7 @@ export const resultFields: INodeProperties[] = [
 					name: 'Page of Objects',
 					value: 'page',
 					description:
-						'Every input item, plus the cursor for the next page — what an index tool answers with',
+						'Every input item, plus the cursor for the next page. What an index tool answers with.',
 				},
 				{
 					name: 'Error',
@@ -109,7 +109,10 @@ export const resultFields: INodeProperties[] = [
 			displayName: 'Page Size',
 			name: 'pageSize',
 			type: 'number',
-			default: "={{ $('Prepare query').first().json.q.limit }}",
+			// eslint-disable-next-line n8n-nodes-base/node-param-default-wrong-for-number -- the
+			// useful default is the page size the query was built with, which is an
+			// expression. A literal would quietly disagree with it.
+			default: 0,
 			displayOptions: { show: { respondWith: ['page'] } },
 			description:
 				'How many rows a full page holds. A short page means there is nothing after it, so no cursor is handed out and the model stops asking.',

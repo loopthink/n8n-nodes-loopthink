@@ -81,7 +81,7 @@ export async function executeRequest(this: IExecuteFunctions): Promise<INodeExec
 		if (!request.url) {
 			throw new NodeOperationError(this.getNode(), 'No url in the Request parameter', {
 				description:
-					'This operation runs the HTTP call loopthink resolved. A workflow tool has no url — route those to their own branch instead.',
+					'This operation runs the HTTP call loopthink resolved. A workflow tool has no url, so route those to their own branch instead.',
 			});
 		}
 

@@ -122,7 +122,7 @@ export async function startSocket(
 				ctx.logger.error(
 					'loopthink Runner: could not establish a WebSocket connection after three attempts. ' +
 						'This network most likely does not allow WebSocket upgrades (a proxy, or TLS inspection breaking them). ' +
-						'Switch Transport to Polling — it needs nothing but plain HTTPS.',
+						'Switch Transport to Polling. It needs nothing but plain HTTPS.',
 				);
 			}
 			reconnectTimer = setTimeout(connect, backoff);

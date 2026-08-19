@@ -38,7 +38,7 @@ out the cursor, masks the answer and sends it.
 
 ### Why the Data Table workflow has a Prepare Query in front of it
 
-The other two sources take the whole query as one expression — a SQL statement, a
+The other two sources take the whole query as one expression, a SQL statement or a
 URL. The Data Table node does not: its conditions are rows in the editor, fixed
 when the workflow is built, and the list as a whole cannot come from an
 expression (n8n walks a string handed to a multi-value collection character by
@@ -68,12 +68,18 @@ it just answers with nothing.
 
 ## Import
 
+These exports name the nodes as they are called once the package is installed
+from npm (`n8n-nodes-loopthink.loopthink`). A local checkout mounted through
+`N8N_CUSTOM_EXTENSIONS` registers the same nodes under `CUSTOM.` instead, and an
+import naming the other one arrives as an unrecognised node. Search and replace
+the prefix if you are running the development rig.
+
 1. Replace the placeholders: `<LOOPTHINK_CREDENTIAL_ID>` plus `<DATA_TABLE_ID>`,
    `<POSTGRES_CREDENTIAL_ID>` or `<API_BASE_URL>`. Easiest is to import first and
    pick the credential and table from the dropdowns in the editor.
 2. Create the tools in loopthink with **Implementation: Workflow** and the
    parameters below. The tool name is the contract: it has to match the Switch.
-3. Activate the workflow. It polls only while active — *Test workflow* listens
+3. Activate the workflow. It polls only while active; *Test workflow* listens
    for a short window and stops.
 
 One runner per MCP server. Two active workflows sharing one runner credential
@@ -92,12 +98,12 @@ answer it, branch or no branch.
 | `created_after` / `created_before` | string | ISO bounds on the creation date |
 | `updated_after` / `updated_before` | string | ISO bounds on the last change |
 
-Returns `{ items, nextCursor, hasMore }` — the same shape n8n's own public API
+Returns `{ items, nextCursor, hasMore }`, the same shape n8n's own public API
 uses. `items` carries id, name, country and the creation date, deliberately not
 the whole record.
 
 No `total`: counting is a second query, and with a cursor the only question is
-whether to ask again. `hasMore` answers that — a full page is the sole evidence
+whether to ask again. `hasMore` answers that: a full page is the sole evidence
 there may be more, so a listing that ends on an exact multiple of `limit` costs
 one extra call to discover it is finished.
 
@@ -118,7 +124,7 @@ one that carries it.
 
 **n8n Data Table.** The cursor is the row `id`, not `createdAt`. A condition list
 here is all ANDed or all ORed, so the `(createdAt, id)` tiebreak a non-unique sort
-key needs cannot be written — and a strict `<` on a non-unique key silently skips
+key needs cannot be written, and a strict `<` on a non-unique key silently skips
 every row sharing the boundary value. Three of the seeded rows share a
 millisecond, so this is not hypothetical. The id is unique and ascends with
 insertion, so ordering by it is insertion order.
@@ -142,14 +148,14 @@ The cursor is `"<iso>|<id>"`, opaque to the caller. Send Result reads one named
 field, so the pair is assembled in the SELECT as a `cursor` column and travels
 with each row: any row in a page can be the one you continue from. Bounds are parameters and are
 cast, so an absent one is a real `NULL` and the predicate drops out; passing `''`
-instead fails the cast. The two things SQL cannot take as parameters — the sort
-direction and the comparison operator — are interpolated from one expression that
+instead fails the cast. The two things SQL cannot take as parameters, the sort
+direction and the comparison operator, are interpolated from one expression that
 can only ever produce `ASC`/`DESC` and `<`/`>`, a whitelist by construction. Never
 interpolate the raw tool parameter there.
 
 **HTTP API.** Use this when the platform cannot describe the call on its own: a
 body to assemble, a response to reshape, a call to make first. A plain GET
-against a documented path needs none of it — author that in loopthink as an HTTP
+against a documented path needs none of it; author that in loopthink as an HTTP
 tool and the runner issues it with no workflow at all.
 
 An API that pages by its own token is the easy case: hand the cursor back

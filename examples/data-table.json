@@ -118,7 +118,7 @@
           ]
         }
       },
-      "type": "CUSTOM.loopthink",
+      "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
         420,

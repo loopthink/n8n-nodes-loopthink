@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-loopthink",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Run loopthink MCP tools from inside your own network. The node reaches out to loopthink, claims tool calls, executes them against your internal HTTP APIs and returns masked results \u2014 no inbound connection required.",
   "keywords": [
     "n8n-community-node-package",
@@ -21,7 +21,6 @@
   "engines": {
     "node": ">=20.15"
   },
-  "main": "index.js",
   "scripts": {
     "build": "npx rimraf dist && tsc && gulp build:icons",
     "dev": "npm run build && concurrently -n tsc,icons \"tsc --watch --preserveWatchOutput\" \"gulp watch:icons\"",
@@ -35,7 +34,9 @@
     "docker:restart": "npm run build && docker compose up -d --force-recreate n8n"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,

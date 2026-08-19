@@ -3,9 +3,13 @@ import type { ICredentialTestRequest, ICredentialType, INodeProperties } from 'n
 export class LoopthinkRunnerApi implements ICredentialType {
 	name = 'loopthinkRunnerApi';
 
-	displayName = 'loopthink Runner API';
+	displayName = 'Loopthink Runner API';
 
-	documentationUrl = 'https://www.loopthink.ai';
+	// Two rules disagree here: one wants a camelCase slug, which n8n resolves
+	// against its own docs, the other wants a URL. A community node has no page
+	// in those docs, so the URL is the one that leads anywhere.
+	// eslint-disable-next-line n8n-nodes-base/cred-class-field-documentation-url-miscased
+	documentationUrl = 'https://www.loopthink.ai/docs/n8n';
 
 	properties: INodeProperties[] = [
 		{
@@ -17,7 +21,7 @@ export class LoopthinkRunnerApi implements ICredentialType {
 			type: 'string',
 			default: 'https://api.eu.loopthink.ai/mcp',
 			description:
-				'The service holding the work queue — the loopthink platform, or a gateway runner inside your own network. Shown together with the secret when the runner is created.',
+				'The service holding the work queue: the loopthink platform, or a gateway runner inside your own network. Shown together with the secret when the runner is created.',
 		},
 		{
 			displayName: 'Workspace ID',
@@ -45,7 +49,7 @@ export class LoopthinkRunnerApi implements ICredentialType {
 			default: '',
 			required: true,
 			description:
-				'Shown once when the runner is created and never again. Lost it? Issue a new one there — the old one keeps working for 24 hours.',
+				'Shown once when the runner is created and never again. Lost it? Issue a new one there; the old one keeps working for 24 hours.',
 		},
 	];
 

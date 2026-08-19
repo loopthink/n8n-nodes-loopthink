@@ -3,8 +3,9 @@ import type {
 	INodeTypeDescription,
 	ITriggerFunctions,
 	ITriggerResponse,
+	JsonObject,
 } from 'n8n-workflow';
-import { NodeOperationError } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 import { startSocket } from './socket';
 import { emitJob, RUNNER_OUTPUTS, type QueuedRequest } from './workflowTools';
@@ -46,7 +47,11 @@ export class LoopthinkRunner implements INodeType {
 		subtitle: '={{$parameter["transport"] === "websocket" ? "pushed" : $parameter["pollInterval"] + "s poll"}}',
 		description: 'Claims loopthink MCP tool calls and executes the HTTP ones inside your network',
 		defaults: { name: 'loopthink Runner' },
-		inputs: [],
+		// eslint-disable-next-line n8n-nodes-base/node-class-description-inputs-wrong-regular-node -- a
+		// trigger takes no input; the rule only recognises that on a class named
+		// *Trigger, and renaming this one would rename the node type and break
+		// every workflow that already uses it.
+		inputs: ['main'],
 		// n8n-workflow 2.x exposes NodeConnectionType as a type, not an enum value,
 		// so the literal is the portable form here.
 		outputs: RUNNER_OUTPUTS,
@@ -85,7 +90,7 @@ export class LoopthinkRunner implements INodeType {
 				typeOptions: { minValue: 1, maxValue: 60 },
 				default: 2,
 				description:
-					'How often to check for work. This is the latency added to every tool call, so lower is snappier — and every poll is a request you pay for. 1–5s is the sensible range.',
+					'How often to check for work. This is the latency added to every tool call, so lower is snappier, and every poll is a request you pay for. 1 to 5 seconds is the sensible range.',
 			},
 			{
 				// A notice renders its displayName — `default` is not shown at all,
@@ -121,7 +126,7 @@ export class LoopthinkRunner implements INodeType {
 				throw new NodeOperationError(
 					this.getNode(),
 					`${label} is missing from the loopthink Runner credential`,
-					{ description: 'Open the credential and fill it in — the values are shown when the runner is created in loopthink.' },
+					{ description: 'Open the credential and fill it in. The values are shown when the runner is created in loopthink.' },
 				);
 			}
 		}
@@ -143,9 +148,12 @@ export class LoopthinkRunner implements INodeType {
 			});
 			if (response.statusCode === 204) return null;
 			if (response.statusCode !== 200) {
-				throw new Error(
-					`loopthink returned ${response.statusCode} when claiming work: ${JSON.stringify(response.body)}`,
-				);
+				throw new NodeApiError(this.getNode(), response.body as JsonObject, {
+					message: `loopthink returned ${response.statusCode} when claiming work`,
+					description:
+						'Check the runner secret and the queue URL on the credential. A 401 means the secret was revoked or belongs to another server.',
+					httpCode: String(response.statusCode),
+				});
 			}
 			return response.body as QueuedRequest;
 		};

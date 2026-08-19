@@ -4,7 +4,7 @@ Run [loopthink](https://www.loopthink.ai) MCP tools from inside your own network
 
 The node reaches out to loopthink, claims tool calls, executes them against your
 internal HTTP APIs, masks the results locally and sends them back. **Nothing has
-to reach your n8n from the internet** — which is the whole point: it exists for
+to reach your n8n from the internet**, which is the whole point: it exists for
 environments where the Docker runner cannot be deployed because inbound traffic
 is not an option.
 
@@ -21,7 +21,7 @@ Claude ──► loopthink ──► queue ──┐
 
 **HTTP tools** are calls loopthink resolved in full: method, URL, headers, body.
 **Workflow tools** are calls it cannot resolve, because the source has no address
-— an n8n Data Table, a Sheet, a database, any node-only integration — so it sends
+(an n8n Data Table, a Sheet, a database, any node-only integration), so it sends
 the validated arguments instead.
 
 Both leave the Runner on the same output. A Switch on `{{$json.tool}}` decides
@@ -40,7 +40,7 @@ over Postgres, and over an HTTP API.
 ## Two nodes
 
 **loopthink Runner** is the trigger: it claims work and executes the HTTP tools.
-**loopthink** is what the workflow does with the rest — *Build Index Page* and
+**loopthink** is what the workflow does with the rest: *Build Index Page* and
 *Send Result*.
 
 ### One transport setting, not two nodes
@@ -56,7 +56,7 @@ Both serve the same queue, so switching loses nothing: work a socket does not
 take stays queued.
 
 **Start with WebSocket.** If it cannot connect, the log says so after three
-attempts — that is the answer, and Polling is the fallback. Corporate proxies and
+attempts, that is the answer, and Polling is the fallback. Corporate proxies and
 TLS inspection are the usual reason an upgrade fails.
 
 ## Install
@@ -68,7 +68,7 @@ Self-hosted n8n only, as community nodes generally are.
 ## Set up
 
 1. In loopthink, open your MCP server → **Runners** → **Add pull runner**.
-2. Copy the block it shows — workspace ID, group ID, secret, queue URL. The secret
+2. Copy the block it shows: workspace ID, group ID, secret, queue URL. The secret
    is displayed once and is not recoverable afterwards.
 3. In n8n, create a **loopthink Runner API** credential (the node's
    **Authentication** slot) and paste the four values. Saving it runs a
@@ -81,7 +81,7 @@ once the workflow is active.
 
 ### Secrets for your own systems
 
-In loopthink you configure the *shape* of a request — which header, which URL —
+In loopthink you configure the *shape* of a request, which header and which URL,
 and write `{{secret.NAME}}` where a value belongs:
 
 ```
@@ -90,7 +90,7 @@ Header  X-API-Key: {{secret.CRM_API_KEY}}
 
 Then add a **loopthink Target Secrets** credential in n8n (the node's **Secrets**
 slot) with a `CRM_API_KEY` entry. The runner fills the placeholder in on the way out. loopthink sends the
-request to make, never the key to make it with — the secret is never stored there
+request to make, never the key to make it with. The secret is never stored there
 and never travels.
 
 Two behaviours worth knowing:
@@ -102,7 +102,7 @@ Two behaviours worth knowing:
   secret, and n8n stores execution data.
 
 A placeholder in a **URL** ends up in the target's access log and in any proxy in
-between. Sometimes an API leaves no choice — but prefer a header where you have one.
+between. Sometimes an API leaves no choice, but prefer a header where you have one.
 
 ## How it behaves
 
@@ -128,7 +128,7 @@ carries the masked payload as `sent`, so what left the network is something you
 can read rather than take on trust.
 
 Answering an index tool, set it to **Page of Objects**: it bundles the rows and
-hands out `nextCursor` from the last one — but only when the page came back full,
+hands out `nextCursor` from the last one, but only when the page came back full,
 because after a short page a cursor buys one more round trip that is certain to
 return nothing, and a model reads an empty page as an error rather than as an
 ending.
@@ -145,9 +145,9 @@ Table node's conditions are rows in the editor, fixed when the workflow is built
 and the list as a whole cannot be computed: handed a string, n8n walks it
 character by character and quietly produces one empty condition per character.
 
-So every row has to hold a value on every call. Prepare Query produces them — a
+So every row has to hold a value on every call. Prepare Query produces them: a
 bound so far outside the data that the comparison is free, a wildcard for an
-optional match, the far end for the first page — and gives every entry the same
+optional match, the far end for the first page. Every entry gets the same
 two fields, so each row is wired the same way:
 
 | | Column | Condition | Value |
@@ -160,8 +160,8 @@ Which comparison a row needs is the node's decision, not the workflow author's.
 Getting it wrong is silent: an equals where a bound belongs still runs, it just
 answers with nothing.
 
-![Prepare Query](docs/prepare-query.png)
-![The Data Table node reading from it](docs/read-bookings.png)
+![Prepare Query](https://raw.githubusercontent.com/loopthink/n8n-nodes-loopthink/main/docs/prepare-query.png)
+![The Data Table node reading from it](https://raw.githubusercontent.com/loopthink/n8n-nodes-loopthink/main/docs/read-bookings.png)
 
 Paging is by **cursor**, not offset, so the source does the work: `id < c` with a
 Limit is one comparison it expresses natively and it hands back only the page.
@@ -169,7 +169,7 @@ See [examples/](examples) for three sources worked through.
 
 ## Masking
 
-Masking runs **here**, before anything travels back — only masked data ever passes
+Masking runs **here**, before anything travels back. Only masked data ever passes
 through the loopthink cloud.
 
 The rules are not configured in n8n. They arrive with each request, so a rule you
@@ -211,7 +211,7 @@ silently reads as its default.
 ### Local test rig
 
 A compose file brings up n8n with this node already loaded, plus an echo service
-to point tool calls at — so you can exercise a full round trip without a real
+to point tool calls at, so you can exercise a full round trip without a real
 internal system:
 
 ```bash
@@ -219,7 +219,7 @@ npm run docker:up
 ```
 
 n8n comes up on <http://127.0.0.1:5680> (override with `LOOPTHINK_N8N_PORT`). From inside the workflow the echo service
-is reachable at `http://echo:8080` — it returns whatever you send it, which makes
+is reachable at `http://echo:8080`. It returns whatever you send it, which makes
 it easy to watch masking work on fields you choose.
 
 ```bash
@@ -239,7 +239,7 @@ than restarts, because `docker compose restart` would not re-resolve the mount.
 The whole package is mounted, not just `./dist`: the build begins with
 `rimraf dist`, and a bind mount pointing at a directory that gets deleted leaves
 the container holding a dangling inode. Every later rebuild would then be
-invisible to it — silently, with the node still running whatever loaded at startup.
+invisible to it, silently, with the node still running whatever loaded at startup.
 
 Custom nodes are loaded from `/custom` rather than `~/.n8n/custom` on purpose:
 that path lives inside n8n's data volume, and the two mounts would otherwise

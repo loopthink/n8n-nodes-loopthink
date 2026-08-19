@@ -14,9 +14,13 @@ import type { ICredentialType, INodeProperties } from 'n8n-workflow';
 export class LoopthinkTargetApi implements ICredentialType {
 	name = 'loopthinkTargetApi';
 
-	displayName = 'loopthink Target Secrets';
+	displayName = 'Loopthink Target Secrets API';
 
-	documentationUrl = 'https://www.loopthink.ai';
+	// Two rules disagree here: one wants a camelCase slug, which n8n resolves
+	// against its own docs, the other wants a URL. A community node has no page
+	// in those docs, so the URL is the one that leads anywhere.
+	// eslint-disable-next-line n8n-nodes-base/cred-class-field-documentation-url-miscased
+	documentationUrl = 'https://www.loopthink.ai/docs/n8n';
 
 	properties: INodeProperties[] = [
 		{
@@ -27,7 +31,7 @@ export class LoopthinkTargetApi implements ICredentialType {
 			typeOptions: { multipleValues: true },
 			default: {},
 			description:
-				'Each entry matches a {{secret.NAME}} placeholder configured in loopthink. A call whose placeholder is missing here is refused rather than sent — an unresolved placeholder would otherwise reach the target system and end up in its logs.',
+				'Each entry matches a {{secret.NAME}} placeholder configured in loopthink. A call whose placeholder is missing here is refused rather than sent, because an unresolved placeholder would reach the target system and end up in its logs.',
 			options: [
 				{
 					name: 'secret',
