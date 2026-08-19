@@ -2,8 +2,8 @@
 
 Run [loopthink](https://www.loopthink.ai) MCP tools from inside your own network.
 
-The node reaches out to loopthink, claims tool calls, executes them against your
-internal HTTP APIs, masks the results locally and sends them back. **Nothing has
+The node reaches out to loopthink, claims tool calls, hands them to your
+workflow, masks whatever it answers with and sends that back. **Nothing has
 to reach your n8n from the internet**, which is the whole point: it exists for
 environments where the Docker runner cannot be deployed because inbound traffic
 is not an option.
@@ -24,15 +24,16 @@ Claude ──► loopthink ──► queue ──┐
 (an n8n Data Table, a Sheet, a database, any node-only integration), so it sends
 the validated arguments instead.
 
-Both leave the Runner on the same output. A Switch on `{{$json.tool}}` decides
-what happens: a workflow tool goes to the branch that answers it, an HTTP tool to
-a branch with **loopthink → Execute Request**, and every branch ends in
+Every call leaves the Runner on the same output. A Switch on `{{$json.tool}}`
+sends each tool to the branch that answers it, and every branch ends in
 **loopthink → Send Result**. Give the Switch a fallback, or a tool nobody answers
 leaves the caller waiting out its timeout.
 
-One branch covers every HTTP tool of a server, because the call is already
-resolved: point Execute Request at `{{ $json.request }}` and it runs whichever
-one arrived.
+What a branch does is your decision, because a tool carries what it needs. A
+parameter the author pinned down arrives alongside the ones the model filled: a
+table name, a statement, a path. So a Postgres branch reads
+`{{ $json.params.statement }}`, and an HTTP branch reads
+`{{ $json.params.path }}` and issues the call with an n8n credential.
 
 See [examples/](examples) for three working workflows: over an n8n Data Table,
 over Postgres, and over an HTTP API.
@@ -79,30 +80,16 @@ That last step matters: while you are only running *Test workflow* in the editor
 the node listens for a short window and then stops. It polls continuously only
 once the workflow is active.
 
-### Secrets for your own systems
+### Credentials for your own systems
 
-In loopthink you configure the *shape* of a request, which header and which URL,
-and write `{{secret.NAME}}` where a value belongs:
+They stay in n8n, on whichever node makes the call, and loopthink never holds
+them. A tool says what to reach, never what to reach it with: the path or the
+statement travels as a fixed parameter, and the API key or database password is
+picked from n8n's own credential store by the node that needs it.
 
-```
-Header  X-API-Key: {{secret.CRM_API_KEY}}
-```
-
-Then add a **loopthink Target Secrets** credential in n8n (the node's **Secrets**
-slot) with a `CRM_API_KEY` entry. The runner fills the placeholder in on the way out. loopthink sends the
-request to make, never the key to make it with. The secret is never stored there
-and never travels.
-
-Two behaviours worth knowing:
-
-- **A missing secret refuses the call.** The literal placeholder is never sent;
-  it would earn a 401 and leave `{{secret.CRM_API_KEY}}` in the target's access
-  log. The error names what is missing.
-- **Execution records show the unresolved form.** A substituted URL can contain a
-  secret, and n8n stores execution data.
-
-A placeholder in a **URL** ends up in the target's access log and in any proxy in
-between. Sometimes an API leaves no choice, but prefer a header where you have one.
+The node used to substitute `{{secret.NAME}}` into a resolved request, and that
+went with the HTTP kind. n8n's credentials do the same job better, because they
+were never anywhere near us to begin with.
 
 ## How it behaves
 
@@ -137,11 +124,6 @@ There is no cursor. A model told `truncated` narrows its filters, or continues
 past the last id it was given by passing `id_after`. Both are ordinary filters it
 already understands, so nothing opaque travels back and forth and the model can
 also bisect a large range instead of only walking forward.
-
-**Execute Request** issues an HTTP tool's call and fills in `{{secret.NAME}}` from
-the **Secrets** credential on the way out. That substitution is the reason this
-is not a plain HTTP Request node: handed the placeholder, a standard node sends
-it verbatim and it lands in the target's access log.
 
 **`$json.q`** is what fills a Data Table node's condition rows, and it arrives
 ready to use. That node cannot take its conditions from an expression: they are

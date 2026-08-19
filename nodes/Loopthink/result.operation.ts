@@ -33,7 +33,13 @@ function pagePayload(
 ): IDataObject | IDataObject[] {
 	if (respondWith === 'object') return (items[0]?.json ?? {}) as IDataObject;
 
-	const rows = items.map((item) => item.json as IDataObject);
+	// n8n's "Always Output Data" emits one empty item when a node found nothing,
+	// which is how a listing that matched no rows arrives here as `[{}]`. Sent on,
+	// that reads to a model as one record with every field missing rather than as
+	// an empty result, and it will happily describe it.
+	const rows = items
+		.map((item) => item.json as IDataObject)
+		.filter((row) => row && Object.keys(row).length > 0);
 	if (respondWith === 'list') return rows as unknown as IDataObject;
 
 	const limit = Number(ctx.getNodeParameter('pageSize', 0));
