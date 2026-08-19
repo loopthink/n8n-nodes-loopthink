@@ -127,19 +127,45 @@ result is not something a workflow can send by forgetting a step. Its output
 carries the masked payload as `sent`, so what left the network is something you
 can read rather than take on trust.
 
+Answering an index tool, set it to **Page of Objects**: it bundles the rows and
+hands out `nextCursor` from the last one — but only when the page came back full,
+because after a short page a cursor buys one more round trip that is certain to
+return nothing, and a model reads an empty page as an error rather than as an
+ending.
+
 **Execute Request** issues an HTTP tool's call and fills in `{{secret.NAME}}` from
 the **Secrets** credential on the way out. That substitution is the reason this
 is not a plain HTTP Request node: handed the placeholder, a standard node sends
 it verbatim and it lands in the target's access log.
 
-There was briefly a second operation that built index pages, and it turned out to
-be earning its place from a limitation that was not there. Paging by **cursor**
-rather than offset lets the source do the work: `id < c` with a Limit is one
-comparison a Data Table node or a `WHERE` clause expresses natively, and it hands
-back only the page. n8n's own **Aggregate** node then bundles the rows into one
-item and trims the columns, and an **Edit Fields** node adds `nextCursor` and
-`hasMore`. Nothing was left for ours to do that a standard node did not already
-do better. See [examples/](examples) for all three worked through.
+**Prepare Query** is only for the Data Table node, and only because that node
+cannot take its conditions from an expression. A SQL statement or a URL is one
+string, so a call that left a filter out simply produces a shorter query. A Data
+Table node's conditions are rows in the editor, fixed when the workflow is built,
+and the list as a whole cannot be computed: handed a string, n8n walks it
+character by character and quietly produces one empty condition per character.
+
+So every row has to hold a value on every call. Prepare Query produces them — a
+bound so far outside the data that the comparison is free, a wildcard for an
+optional match, the far end for the first page — and gives every entry the same
+two fields, so each row is wired the same way:
+
+| | Column | Condition | Value |
+|---|---|---|---|
+| cursor | `id` | `{{ $json.q.id.condition }}` | `{{ $json.q.id.value }}` |
+| range | `createdAt` | `{{ $json.q.createdAt_min.condition }}` | `{{ $json.q.createdAt_min.value }}` |
+| match | `status` | `{{ $json.q.status.condition }}` | `{{ $json.q.status.value }}` |
+
+Which comparison a row needs is the node's decision, not the workflow author's.
+Getting it wrong is silent: an equals where a bound belongs still runs, it just
+answers with nothing.
+
+![Prepare Query](docs/prepare-query.png)
+![The Data Table node reading from it](docs/read-bookings.png)
+
+Paging is by **cursor**, not offset, so the source does the work: `id < c` with a
+Limit is one comparison it expresses natively and it hands back only the page.
+See [examples/](examples) for three sources worked through.
 
 ## Masking
 

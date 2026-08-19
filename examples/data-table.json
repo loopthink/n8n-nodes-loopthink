@@ -11,8 +11,8 @@
       "type": "n8n-nodes-loopthink.loopthinkRunner",
       "typeVersion": 1,
       "position": [
-        -680,
-        0
+        -60,
+        360
       ],
       "credentials": {
         "loopthinkRunnerApi": {
@@ -85,9 +85,49 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        -440,
-        60
+        180,
+        360
       ]
+    },
+    {
+      "parameters": {
+        "operation": "prepare",
+        "params": "={{ $json.params }}",
+        "defaultLimit": 20,
+        "cursorColumn": "id",
+        "cursorType": "number",
+        "order": "DESC",
+        "ranges": {
+          "range": [
+            {
+              "column": "createdAt",
+              "type": "date",
+              "parameter": "created"
+            },
+            {
+              "column": "updatedAt",
+              "type": "date",
+              "parameter": "updated"
+            }
+          ]
+        },
+        "matches": {
+          "match": [
+            {
+              "column": "country",
+              "parameter": "country"
+            }
+          ]
+        }
+      },
+      "type": "CUSTOM.loopthink",
+      "typeVersion": 1,
+      "position": [
+        420,
+        100
+      ],
+      "id": "prepare-query",
+      "name": "Prepare query"
     },
     {
       "parameters": {
@@ -103,36 +143,41 @@
           "conditions": [
             {
               "keyName": "id",
-              "condition": "={{ $('loopthink Runner').first().json.params.sort !== 'oldest' ? 'lt' : 'gt' }}",
-              "keyValue": "={{ $('loopthink Runner').first().json.params.cursor || ($('loopthink Runner').first().json.params.sort !== 'oldest' ? 9007199254740991 : 0) }}"
+              "condition": "={{ $json.q.id.condition }}",
+              "keyValue": "={{ $json.q.id.value }}"
             },
             {
               "keyName": "createdAt",
-              "condition": "gte",
-              "keyValue": "={{ $('loopthink Runner').first().json.params.created_after || '0001-01-01T00:00:00.000Z' }}"
+              "condition": "={{ $json.q.createdAt_min.condition }}",
+              "keyValue": "={{ $json.q.createdAt_min.value }}"
             },
             {
               "keyName": "createdAt",
-              "condition": "lte",
-              "keyValue": "={{ $('loopthink Runner').first().json.params.created_before || '9999-12-31T00:00:00.000Z' }}"
+              "condition": "={{ $json.q.createdAt_max.condition }}",
+              "keyValue": "={{ $json.q.createdAt_max.value }}"
             },
             {
               "keyName": "updatedAt",
-              "condition": "gte",
-              "keyValue": "={{ $('loopthink Runner').first().json.params.updated_after || '0001-01-01T00:00:00.000Z' }}"
+              "condition": "={{ $json.q.updatedAt_min.condition }}",
+              "keyValue": "={{ $json.q.updatedAt_min.value }}"
             },
             {
               "keyName": "updatedAt",
-              "condition": "lte",
-              "keyValue": "={{ $('loopthink Runner').first().json.params.updated_before || '9999-12-31T00:00:00.000Z' }}"
+              "condition": "={{ $json.q.updatedAt_max.condition }}",
+              "keyValue": "={{ $json.q.updatedAt_max.value }}"
+            },
+            {
+              "keyName": "country",
+              "condition": "={{ $json.q.country.condition }}",
+              "keyValue": "={{ $json.q.country.value }}"
             }
           ]
         },
         "returnAll": false,
-        "limit": "={{ $('loopthink Runner').first().json.params.limit || 20 }}",
+        "limit": "={{ $json.q.limit }}",
         "orderBy": true,
         "orderByColumn": "id",
-        "orderByDirection": "={{ $('loopthink Runner').first().json.params.sort !== 'oldest' ? 'DESC' : 'ASC' }}",
+        "orderByDirection": "={{ $json.q.order }}",
         "options": {}
       },
       "id": "read-customers",
@@ -140,57 +185,53 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -180,
-        -160
-      ]
-    },
-    {
-      "parameters": {
-        "aggregate": "aggregateAllItemData",
-        "destinationFieldName": "items",
-        "include": "specifiedFields",
-        "fieldsToInclude": "id, name, country, createdAt",
-        "options": {}
-      },
-      "id": "aggregate",
-      "name": "Aggregate",
-      "type": "n8n-nodes-base.aggregate",
-      "typeVersion": 1,
-      "position": [
-        80,
-        -160
+        660,
+        100
       ]
     },
     {
       "parameters": {
         "mode": "manual",
-        "assignments": {
-          "assignments": [
-            {
-              "id": "c",
-              "name": "nextCursor",
-              "type": "string",
-              "value": "={{ $json.items.length ? String($json.items[$json.items.length - 1].id) : null }}"
-            },
-            {
-              "id": "m",
-              "name": "hasMore",
-              "type": "boolean",
-              "value": "={{ $json.items.length >= ($('loopthink Runner').first().json.params.limit || 20) }}"
-            }
-          ]
-        },
         "includeOtherFields": true,
+        "include": "selected",
+        "includeFields": "id, name, country, revenue",
+        "assignments": {
+          "assignments": []
+        },
         "options": {}
       },
-      "id": "envelope",
-      "name": "Envelope",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
       "position": [
-        320,
-        -160
-      ]
+        880,
+        100
+      ],
+      "id": "keep-index-fields",
+      "name": "Keep index fields"
+    },
+    {
+      "parameters": {
+        "operation": "result",
+        "request": "={{ $('loopthink Runner').first().json }}",
+        "respondWith": "page",
+        "status": 200,
+        "cursorField": "id",
+        "pageSize": "={{ $('Prepare query').first().json.q.limit }}"
+      },
+      "id": "answer-index",
+      "name": "Answer index",
+      "type": "n8n-nodes-loopthink.loopthink",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        100
+      ],
+      "credentials": {
+        "loopthinkRunnerApi": {
+          "id": "<LOOPTHINK_CREDENTIAL_ID>",
+          "name": "Loopthink Runner"
+        }
+      }
     },
     {
       "parameters": {
@@ -207,7 +248,7 @@
             {
               "keyName": "id",
               "condition": "eq",
-              "keyValue": "={{ $('loopthink Runner').first().json.params.id }}"
+              "keyValue": "={{ $json.params.id }}"
             }
           ]
         },
@@ -220,31 +261,9 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -180,
-        120
+        420,
+        380
       ]
-    },
-    {
-      "parameters": {
-        "operation": "result",
-        "request": "={{ $('loopthink Runner').first().json }}",
-        "respondWith": "object",
-        "status": 200
-      },
-      "id": "answer-index",
-      "name": "Answer index",
-      "type": "n8n-nodes-loopthink.loopthink",
-      "typeVersion": 1,
-      "position": [
-        580,
-        -160
-      ],
-      "credentials": {
-        "loopthinkRunnerApi": {
-          "id": "<LOOPTHINK_CREDENTIAL_ID>",
-          "name": "Loopthink Runner"
-        }
-      }
     },
     {
       "parameters": {
@@ -258,8 +277,8 @@
       "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        580,
-        120
+        660,
+        380
       ],
       "credentials": {
         "loopthinkRunnerApi": {
@@ -280,8 +299,8 @@
       "type": "n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        580,
-        340
+        420,
+        640
       ],
       "credentials": {
         "loopthinkRunnerApi": {
@@ -307,7 +326,7 @@
       "main": [
         [
           {
-            "node": "Read customers",
+            "node": "Prepare query",
             "type": "main",
             "index": 0
           }
@@ -328,29 +347,29 @@
         ]
       ]
     },
+    "Prepare query": {
+      "main": [
+        [
+          {
+            "node": "Read customers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Read customers": {
       "main": [
         [
           {
-            "node": "Aggregate",
+            "node": "Keep index fields",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Aggregate": {
-      "main": [
-        [
-          {
-            "node": "Envelope",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Envelope": {
+    "Keep index fields": {
       "main": [
         [
           {

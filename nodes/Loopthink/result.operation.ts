@@ -14,6 +14,33 @@ import { applyMasking, rulesForScope, type MaskingRule } from '../LoopthinkRunne
  * without anyone editing a workflow.
  */
 
+/**
+ * The envelope an index tool answers with.
+ *
+ * A cursor is handed out only when the page came back full. After a short page
+ * there is nothing left, and a cursor would buy one more round trip that is
+ * certain to return an empty page — which a model reads as an error rather than
+ * as an ending.
+ */
+function pagePayload(
+	ctx: IExecuteFunctions,
+	respondWith: 'object' | 'list' | 'page',
+	items: INodeExecutionData[],
+): IDataObject | IDataObject[] {
+	if (respondWith === 'object') return (items[0]?.json ?? {}) as IDataObject;
+
+	const rows = items.map((item) => item.json as IDataObject);
+	if (respondWith === 'list') return rows as unknown as IDataObject;
+
+	const cursorField = ctx.getNodeParameter('cursorField', 0) as string;
+	const pageSize = Number(ctx.getNodeParameter('pageSize', 0));
+	const full = Number.isFinite(pageSize) && pageSize > 0 && rows.length >= pageSize;
+	const last = rows[rows.length - 1];
+	const nextCursor = full && last ? ((last[cursorField] as string | number) ?? null) : null;
+
+	return { items: rows, nextCursor, hasMore: nextCursor !== null };
+}
+
 interface QueuedRequestRef {
 	requestId?: string;
 	masking?: MaskingRule[];
@@ -57,11 +84,35 @@ export const resultFields: INodeProperties[] = [
 					description: 'Every input item as an array',
 				},
 				{
+					name: 'Page of Objects',
+					value: 'page',
+					description:
+						'Every input item, plus the cursor for the next page — what an index tool answers with',
+				},
+				{
 					name: 'Error',
 					value: 'error',
 					description: 'Report a failure so the waiting caller gets a reason instead of a timeout',
 				},
 			],
+		},
+		{
+			displayName: 'Cursor Field',
+			name: 'cursorField',
+			type: 'string',
+			default: 'id',
+			displayOptions: { show: { respondWith: ['page'] } },
+			description:
+				'The field the table was sorted by. Its value in the last row becomes nextCursor, which the model sends back to ask for the page after this one.',
+		},
+		{
+			displayName: 'Page Size',
+			name: 'pageSize',
+			type: 'number',
+			default: "={{ $('Prepare query').first().json.q.limit }}",
+			displayOptions: { show: { respondWith: ['page'] } },
+			description:
+				'How many rows a full page holds. A short page means there is nothing after it, so no cursor is handed out and the model stops asking.',
 		},
 		{
 			displayName: 'Status',
@@ -105,14 +156,17 @@ export async function executeResult(this: IExecuteFunctions): Promise<INodeExecu
 		);
 	}
 
-	const respondWith = this.getNodeParameter('respondWith', 0) as 'object' | 'list' | 'error';
+	const respondWith = this.getNodeParameter('respondWith', 0) as
+		| 'object'
+		| 'list'
+		| 'page'
+		| 'error';
 
 	let body: IDataObject;
 	if (respondWith === 'error') {
 		body = { error: String(this.getNodeParameter('error', 0) ?? 'Tool execution failed') };
 	} else {
-		const payload =
-			respondWith === 'list' ? items.map((item) => item.json) : (items[0]?.json ?? {});
+		const payload = pagePayload(this, respondWith, items);
 		body = {
 			status: this.getNodeParameter('status', 0) as number,
 			// The one place masking happens for a workflow tool.

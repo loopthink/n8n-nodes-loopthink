@@ -115,51 +115,23 @@
     },
     {
       "parameters": {
-        "aggregate": "aggregateAllItemData",
-        "destinationFieldName": "items",
-        "include": "specifiedFields",
-        "fieldsToInclude": "id, name, country, createdAt",
-        "options": {}
-      },
-      "id": "aggregate",
-      "name": "Aggregate",
-      "type": "n8n-nodes-base.aggregate",
-      "typeVersion": 1,
-      "position": [
-        80,
-        -160
-      ]
-    },
-    {
-      "parameters": {
         "mode": "manual",
-        "assignments": {
-          "assignments": [
-            {
-              "id": "c",
-              "name": "nextCursor",
-              "type": "string",
-              "value": "={{ $json.items.length ? String($json.items[$json.items.length - 1].id) : null }}"
-            },
-            {
-              "id": "m",
-              "name": "hasMore",
-              "type": "boolean",
-              "value": "={{ $json.items.length >= ($('loopthink Runner').first().json.params.limit || 20) }}"
-            }
-          ]
-        },
         "includeOtherFields": true,
+        "include": "selected",
+        "includeFields": "id, name, country, revenue",
+        "assignments": {
+          "assignments": []
+        },
         "options": {}
       },
-      "id": "envelope",
-      "name": "Envelope",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
       "position": [
-        320,
+        80,
         -160
-      ]
+      ],
+      "id": "keep-index-fields",
+      "name": "Keep index fields"
     },
     {
       "parameters": {
@@ -186,8 +158,10 @@
       "parameters": {
         "operation": "result",
         "request": "={{ $('loopthink Runner').first().json }}",
-        "respondWith": "object",
-        "status": 200
+        "respondWith": "page",
+        "status": 200,
+        "cursorField": "id",
+        "pageSize": "={{ $('loopthink Runner').first().json.params.limit || 20 }}"
       },
       "id": "answer-index",
       "name": "Answer index",
@@ -290,29 +264,7 @@
       "main": [
         [
           {
-            "node": "Aggregate",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Aggregate": {
-      "main": [
-        [
-          {
-            "node": "Envelope",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Envelope": {
-      "main": [
-        [
-          {
-            "node": "Answer index",
+            "node": "Keep index fields",
             "type": "main",
             "index": 0
           }
@@ -324,6 +276,17 @@
         [
           {
             "node": "Answer show",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep index fields": {
+      "main": [
+        [
+          {
+            "node": "Answer index",
             "type": "main",
             "index": 0
           }

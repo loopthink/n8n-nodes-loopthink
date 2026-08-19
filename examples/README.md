@@ -7,25 +7,24 @@ environment before being exported.
 They share one shape:
 
 ```
-[loopthink Runner] ─ Executed ─────────────────────────► (audit trail)
-                   └ To Answer → [Switch on {{$json.tool}}]
-                                    ├ …_index → read → [Aggregate] → [Edit Fields] ─┐
-                                    ├ …_show  → read ────────────────────────────────┤
-                                    └ unhandled ─────────────────────────────────────┤
-                                                                    [loopthink] ◄─────┘
+[loopthink Runner] → [Switch on {{$json.tool}}]
+                        ├ …_index → read → [Keep index fields] ─┐
+                        ├ …_show  → read ───────────────────────┤
+                        └ unhandled ────────────────────────────┤
+                                                 [loopthink] ◄───┘
 ```
 
 The runner does not know which tools this workflow answers. It emits every
-workflow tool on **To Answer** and the Switch decides, with the names where you
+claimed call on its one output and the Switch decides, with the names where you
 can read them.
 
 | | [data-table.json](data-table.json) | [postgres.json](postgres.json) | [http-api.json](http-api.json) |
 |---|---|---|---|
 | Source | n8n Data Table | Postgres | any HTTP API |
 | Cursor key | row `id` | `(created_at, id)` | whatever the API pages by |
-| Filter, sort, page | the Data Table node | `WHERE` / `ORDER BY` / `LIMIT` | the API's own parameters |
-| Bundle and trim | Aggregate | Aggregate | Aggregate |
-| `nextCursor`, `hasMore` | Edit Fields | Edit Fields | Edit Fields |
+| Filter, sort, page | Prepare Query → the Data Table node | `WHERE` / `ORDER BY` / `LIMIT` | the API's own parameters |
+| Trim the columns | Edit Fields | Edit Fields | Edit Fields |
+| `nextCursor`, `hasMore` | Send Result, **Page of Objects** | same | same |
 
 **The source does all of it.** Paging by cursor rather than offset is what makes
 that possible: `id < c` with a Limit is one comparison the source can do itself,
@@ -33,9 +32,36 @@ and it hands back only the page. Offset made it hand over every row so the
 workflow could slice them, and it shifted the whole listing under the caller
 whenever a row was inserted between two pages.
 
-Everything after the source is a standard n8n node — Aggregate bundles the rows
-into one item and trims the columns, Edit Fields adds the cursor. loopthink's own
-node does one thing: mask the answer and send it.
+Everything after the source is a standard n8n node: Edit Fields keeps the columns
+the index tool is meant to expose. loopthink's own node bundles the rows, hands
+out the cursor, masks the answer and sends it.
+
+### Why the Data Table workflow has a Prepare Query in front of it
+
+The other two sources take the whole query as one expression — a SQL statement, a
+URL. The Data Table node does not: its conditions are rows in the editor, fixed
+when the workflow is built, and the list as a whole cannot come from an
+expression (n8n walks a string handed to a multi-value collection character by
+character and quietly produces one empty condition per character).
+
+So the rows have to be there whether or not the call filled them, and each one
+needs a value that cannot exclude anything when it was not filled. **Prepare
+Query** produces those values: a range gets a bound so far outside the data that
+the comparison is free, an optional match gets a wildcard, and the first page
+starts at the far end.
+
+Every entry has the same two fields, so every row is wired the same way:
+
+| Row | Column | Condition | Value |
+|---|---|---|---|
+| cursor | `id` | `{{ $json.q.id.condition }}` | `{{ $json.q.id.value }}` |
+| range, lower | `createdAt` | `{{ $json.q.createdAt_min.condition }}` | `{{ $json.q.createdAt_min.value }}` |
+| range, upper | `createdAt` | `{{ $json.q.createdAt_max.condition }}` | `{{ $json.q.createdAt_max.value }}` |
+| optional match | `country` | `{{ $json.q.country.condition }}` | `{{ $json.q.country.value }}` |
+
+Pick the column, then paste the same pair with the column's key. Which comparison
+a row needs is the node's decision: an equals where a bound belongs still runs,
+it just answers with nothing.
 
 ## Import
 
@@ -94,7 +120,7 @@ every row sharing the boundary value. Three of the seeded rows share a
 millisecond, so this is not hypothetical. The id is unique and ascends with
 insertion, so ordering by it is insertion order.
 
-Every bound gets a sentinel (`0001-01-01`, `9999-12-31`, a huge id) rather than
+Bounds are filled with sentinels (`0001-01-01`, `9999-12-31`, a huge id) rather than
 being left out, because a condition with an empty value fails with `Invalid date
 string ''`. A sentinel keeps the condition list fixed and lets an absent
 parameter mean "no bound".
