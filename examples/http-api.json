@@ -160,7 +160,7 @@
         "request": "={{ $('loopthink Runner').first().json }}",
         "respondWith": "page",
         "status": 200,
-        "pageSize": "={{ $('loopthink Runner').first().json.q.limit }}"
+        "pageSize": "={{ $('loopthink Runner').first().json.params.limit }}"
       },
       "id": "answer-index",
       "name": "Answer index",

@@ -50,6 +50,41 @@ function pagePayload(
 	return { items: capped ? rows.slice(0, limit) : rows, truncated: capped && rows.length > limit };
 }
 
+/**
+ * What one answer may carry.
+ *
+ * Mirrors the platform's own budget, deliberately duplicated: this node runs in
+ * the customer's n8n and shares no code with the backend, and the value has to
+ * be known *here* to be useful. Measured after the POST, an oversized body is
+ * already a rejected request, the call stays unanswered, and the caller waits
+ * out its timeout to be told nothing.
+ */
+const MAX_RESULT_BYTES = 300 * 1024;
+
+/**
+ * Written for the model, not for whoever is reading this execution.
+ *
+ * The size is a fact about our queue; the model that asked has no idea it caused
+ * this. So the sentence says what came back, what fits, and the two ways to ask
+ * for less. A model told that splits the range and asks again, which is the
+ * behaviour we want and the one a status code never produces.
+ */
+function tooLargeMessage(bytes: number, rows?: number): string {
+	const kb = (n: number) => `${Math.round(n / 1024)} KB`;
+	const counted = rows === undefined ? '' : `${rows.toLocaleString('en-US')} rows, `;
+	return (
+		`The result was too large to return: ${counted}${kb(bytes)}, and one answer can carry ${kb(MAX_RESULT_BYTES)}. ` +
+		'Nothing was returned. Ask for a smaller slice and combine the answers: narrow the filters, for instance a ' +
+		'shorter date range or a more specific match, or pass a smaller limit if this tool takes one.'
+	);
+}
+
+function countRows(payload: unknown): number | undefined {
+	if (Array.isArray(payload)) return payload.length;
+	const items = (payload as IDataObject)?.items;
+	return Array.isArray(items) ? items.length : undefined;
+}
+
 interface QueuedRequestRef {
 	requestId?: string;
 	masking?: MaskingRule[];
@@ -113,10 +148,13 @@ export const resultFields: INodeProperties[] = [
 			// expression; a literal would quietly disagree with it. The comment has
 			// to sit directly above the property or --fix replaces the default.
 			// eslint-disable-next-line n8n-nodes-base/node-param-default-wrong-for-number
-			default: "={{ $('loopthink Runner').first().json.q.limit }}",
+			default: "={{ $('loopthink Runner').first().json.params.limit }}",
 			displayOptions: { show: { respondWith: ['page'] } },
+			// `$json` is n8n's own variable. Upper-cased it is not a JSON reference,
+			// it is a broken expression, so the rule has to be off for this line.
+			// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-json
 			description:
-				'How many rows to answer with. Read one more than this in the branch: if the extra row arrives, the answer is marked truncated.',
+				'How many rows to answer with. Set the reading node\'s own limit to {{ $json.params.limit + 1 }}: if that extra row arrives, the answer is marked truncated.',
 		},
 		{
 			displayName: 'Status',
@@ -171,11 +209,16 @@ export async function executeResult(this: IExecuteFunctions): Promise<INodeExecu
 		body = { error: String(this.getNodeParameter('error', 0) ?? 'Tool execution failed') };
 	} else {
 		const payload = pagePayload(this, respondWith, items);
-		body = {
-			status: this.getNodeParameter('status', 0) as number,
-			// The one place masking happens for a workflow tool.
-			data: applyMasking(payload, rulesForScope(request.masking ?? [], request.scope ?? undefined)),
-		};
+		// The one place masking happens for a workflow tool.
+		const data = applyMasking(payload, rulesForScope(request.masking ?? [], request.scope ?? undefined));
+
+		// Measured on the masked copy, because that is the one that travels, and
+		// after masking rather than before, because a redaction changes the size.
+		const size = Buffer.byteLength(JSON.stringify(data ?? null), 'utf8');
+		body =
+			size > MAX_RESULT_BYTES
+				? { error: tooLargeMessage(size, countRows(data)) }
+				: { status: this.getNodeParameter('status', 0) as number, data };
 	}
 
 	const response = await this.helpers.httpRequest({

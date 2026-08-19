@@ -125,11 +125,12 @@ past the last id it was given by passing `id_after`. Both are ordinary filters i
 already understands, so nothing opaque travels back and forth and the model can
 also bisect a large range instead of only walking forward.
 
-**`$json.q`** is what fills a Data Table node's condition rows, and it arrives
-ready to use. That node cannot take its conditions from an expression: they are
-rows in the editor, fixed when the workflow is built, and the list as a whole
-cannot be computed, because n8n walks a string handed to a multi-value collection
-character by character and quietly produces one empty condition per character.
+**`$json.params`** is what fills a Data Table node's condition rows, and it
+arrives ready to use. That node cannot take its conditions from an expression:
+they are rows in the editor, fixed when the workflow is built, and the list as a
+whole cannot be computed, because n8n walks a string handed to a multi-value
+collection character by character and quietly produces one empty condition per
+character.
 
 So every row has to hold a value on every call, including the ones the model left
 empty. The platform sends them, keyed by the tool's parameter name: a bound so
@@ -138,14 +139,20 @@ match. One key, one plain value:
 
 | Tool parameter | Column | Comparison | Value |
 |---|---|---|---|
-| `created_after` | `createdAt` | Or Later | `{{ $json.q.created_after }}` |
-| `created_before` | `createdAt` | Or Earlier | `{{ $json.q.created_before }}` |
-| `status` | `status` | Contains | `{{ $json.q.status }}` |
-| `id_after` | `id` | Greater Than | `{{ $json.q.id_after }}` |
+| `created_after` | `createdAt` | Or Later | `{{ $json.params.created_after }}` |
+| `created_before` | `createdAt` | Or Earlier | `{{ $json.params.created_before }}` |
+| `status` | `status` | Contains | `{{ $json.params.status }}` |
+| `id_after` | `id` | Greater Than | `{{ $json.params.id_after }}` |
 
 The comparison is chosen once from the dropdown and never changes, so it is not
-in the data. Set **Limit** to `{{ $json.q.fetch }}`, which is one more than the
-limit, and **Order** to `{{ $json.q.order }}`.
+in the data.
+
+Every key under `params` is a parameter the tool declared, under the name its
+author typed. Nothing is added on the way. A tool that wants a cap declares
+`limit` like any other parameter, and then the reading node's **Limit** is
+`{{ $json.params.limit + 1 }}` — one more than the answer carries, which is where
+`truncated` comes from. A tool that declares `sort` gets `ASC` or `DESC` under
+that name, ready for **Order**.
 
 `id_after` is what lets a model read on, and it is an ordinary parameter like any
 other. Compare it with **Greater Than** rather than Or Later, so that it means
@@ -153,9 +160,18 @@ what it says and the boundary row is not returned twice.
 
 ![The Data Table node reading from it](https://raw.githubusercontent.com/loopthink/n8n-nodes-loopthink/main/docs/read-bookings.png)
 
-Paging is by **cursor**, not offset, so the source does the work: `id < c` with a
-Limit is one comparison it expresses natively and it hands back only the page.
 See [examples/](examples) for three sources worked through.
+
+### When an answer is too large
+
+One answer carries 300 KB. Past that **Send Result** does not send the rows at
+all: it answers with a sentence naming the size and the row count and saying to
+narrow the filters or pass a smaller limit, which a model acts on by splitting
+its question and asking again.
+
+Measured before the POST on purpose. Sent anyway, an oversized body is rejected
+by whichever layer notices first, the call stays unanswered, and the caller waits
+out its timeout to learn nothing at all.
 
 ## Masking
 
