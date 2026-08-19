@@ -1,4 +1,4 @@
-# n8n-nodes-loopthink
+# @loopthink/n8n-nodes-loopthink
 
 Run [loopthink](https://www.loopthink.ai) MCP tools from inside your own network.
 
@@ -61,7 +61,7 @@ TLS inspection are the usual reason an upgrade fails.
 
 ## Install
 
-Settings → Community Nodes → Install → `n8n-nodes-loopthink`
+Settings → Community Nodes → Install → `@loopthink/n8n-nodes-loopthink`
 
 Self-hosted n8n only, as community nodes generally are.
 

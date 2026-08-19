@@ -69,7 +69,7 @@ any other, which is why nothing here knows the word cursor.
 ## Import
 
 These exports name the nodes as they are called once the package is installed
-from npm (`n8n-nodes-loopthink.loopthink`). A local checkout mounted through
+from npm (`@loopthink/n8n-nodes-loopthink.loopthink`). A local checkout mounted through
 `N8N_CUSTOM_EXTENSIONS` registers the same nodes under `CUSTOM.` instead, and an
 import naming the other one arrives as an unrecognised node. Search and replace
 the prefix if you are running the development rig.

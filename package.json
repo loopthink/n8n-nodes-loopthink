@@ -1,5 +1,5 @@
 {
-  "name": "n8n-nodes-loopthink",
+  "name": "@loopthink/n8n-nodes-loopthink",
   "version": "0.9.0",
   "description": "Run loopthink MCP tools from inside your own network. The node reaches out to loopthink, claims tool calls, executes them against your internal HTTP APIs and returns masked results \u2014 no inbound connection required.",
   "keywords": [

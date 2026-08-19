@@ -8,7 +8,7 @@
       },
       "id": "loopthink-runner",
       "name": "loopthink Runner",
-      "type": "n8n-nodes-loopthink.loopthinkRunner",
+      "type": "@loopthink/n8n-nodes-loopthink.loopthinkRunner",
       "typeVersion": 1,
       "position": [
         -680,
@@ -164,7 +164,7 @@
       },
       "id": "answer-index",
       "name": "Answer index",
-      "type": "n8n-nodes-loopthink.loopthink",
+      "type": "@loopthink/n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
         580,
@@ -186,7 +186,7 @@
       },
       "id": "answer-show",
       "name": "Answer show",
-      "type": "n8n-nodes-loopthink.loopthink",
+      "type": "@loopthink/n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
         580,
@@ -208,7 +208,7 @@
       },
       "id": "answer-unhandled",
       "name": "Answer unhandled",
-      "type": "n8n-nodes-loopthink.loopthink",
+      "type": "@loopthink/n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
         580,

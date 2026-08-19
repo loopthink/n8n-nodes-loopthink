@@ -49,6 +49,9 @@ export const prepareFields: INodeProperties[] = [
 			{ name: 'Newest First', value: 'DESC' },
 			{ name: 'Oldest First', value: 'ASC' },
 		],
+		// `id` here is the column name n8n gives every data table, not the word;
+		// upper-casing it would name something that does not exist.
+		// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
 		description:
 			'Used unless the call sends a sort parameter of "oldest" or "newest". Ascending by id is also what lets a model read a long list in order.',
 	},
@@ -59,6 +62,9 @@ export const prepareFields: INodeProperties[] = [
 		type: 'fixedCollection',
 		typeOptions: { multipleValues: true },
 		default: {},
+		// `id` here is the column name n8n gives every data table, not the word;
+		// upper-casing it would name something that does not exist.
+		// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id
 		description:
 			'One entry per column the tool can narrow down. Each yields a min and a max, filled from the call or opened all the way up. A range on id is what lets a model continue past the last row it saw.',
 		options: [
