@@ -1,5 +1,4 @@
 import type {
-	IDataObject,
 	INodeType,
 	INodeTypeDescription,
 	ITriggerFunctions,
@@ -7,18 +6,8 @@ import type {
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
-import { applyMasking, rulesForScope } from './masking';
-import { MissingSecretError, secretsFromCredential, substituteSecrets } from './secrets';
 import { startSocket } from './socket';
-import {
-	emitOn,
-	emitWorkflowTool,
-	EXECUTED_OUTPUT,
-	isParamsRequest,
-	RUNNER_OUTPUTS,
-	type HttpPayload,
-	type QueuedRequest,
-} from './workflowTools';
+import { emitJob, RUNNER_OUTPUTS, type QueuedRequest } from './workflowTools';
 
 /**
  * loopthink Runner — executes MCP tool calls inside your own network.
@@ -33,6 +22,14 @@ import {
  * The connection is outbound only. Nothing needs to reach this n8n from the
  * internet, which is the entire reason this node exists instead of the Docker
  * runner.
+ *
+ * It claims work and emits it. It does not execute anything: an HTTP tool goes
+ * to a branch ending in loopthink's Execute Request, a workflow tool to a branch
+ * that answers it. Both then answer through Send Result. Executing inside the
+ * trigger meant one output said "already answered" and another said "still needs
+ * answering", a distinction every workflow had to know about, and it put the
+ * credentials for the customer's own APIs on a node that mostly does not call
+ * them.
  */
 
 export class LoopthinkRunner implements INodeType {
@@ -54,10 +51,7 @@ export class LoopthinkRunner implements INodeType {
 		// so the literal is the portable form here.
 		outputs: RUNNER_OUTPUTS,
 		credentials: [
-			// Both slots render as a bare "Credential" without these — which tells
-			// nobody which one is which.
 			{ name: 'loopthinkRunnerApi', required: true, displayName: 'Authentication' },
-			{ name: 'loopthinkTargetApi', required: false, displayName: 'Secrets' },
 		],
 		properties: [
 			{
@@ -94,35 +88,11 @@ export class LoopthinkRunner implements INodeType {
 					'How often to check for work. This is the latency added to every tool call, so lower is snappier — and every poll is a request you pay for. 1–5s is the sensible range.',
 			},
 			{
-				displayName: 'Request Timeout (Seconds)',
-				name: 'requestTimeout',
-				type: 'number',
-				typeOptions: { minValue: 1, maxValue: 120 },
-				default: 30,
-				description:
-					'How long to wait for the internal API before giving up and reporting the failure back to loopthink',
-			},
-			{
-				displayName: 'Emit Results',
-				name: 'emitResults',
-				type: 'boolean',
-				default: true,
-				description:
-					'Whether to emit each handled call into the workflow. Useful as an audit trail; the call is executed and answered either way.',
-			},
-			{
+				// A notice renders its displayName — `default` is not shown at all,
+				// which is easy to get backwards and leaves an empty box behind.
 				displayName:
-					'A call this node cannot execute leaves on <b>To Answer</b>: the platform sends the tool name and the validated arguments, because the source has no address to call. Route it with a Switch on <code>{{$json.tool}}</code> and end each branch with a <b>loopthink Result</b> node. Give the Switch a fallback output too, or a tool nobody answers leaves the caller waiting for its timeout.',
+					'Every claimed call leaves here. Route it with a Switch on <code>{{$json.tool}}</code>: a workflow tool goes to the branch that answers it, an HTTP tool to a branch with <b>loopthink → Execute Request</b>. Every branch ends in <b>loopthink → Send Result</b>. Give the Switch a fallback, or a tool nobody answers leaves the caller waiting out its timeout.',
 				name: 'workflowNotice',
-				type: 'notice',
-				default: '',
-			},
-			{
-				// A notice renders its displayName — `default` is not shown at all, which
-				// is easy to get backwards and leaves an empty box behind.
-				displayName:
-					'Results are masked here, inside your network, before they travel back. Keys for your internal APIs stay in this n8n: write <code>{{secret.NAME}}</code> in loopthink where a value belongs, and add a matching entry under <b>Secrets</b>. A call whose placeholder has no entry is refused rather than sent.',
-				name: 'notice',
 				type: 'notice',
 				default: '',
 			},
@@ -132,8 +102,6 @@ export class LoopthinkRunner implements INodeType {
 	async trigger(this: ITriggerFunctions): Promise<ITriggerResponse> {
 		const credentials = await this.getCredentials('loopthinkRunnerApi');
 		const pollInterval = (this.getNodeParameter('pollInterval', 2) as number) * 1000;
-		const requestTimeout = (this.getNodeParameter('requestTimeout', 30) as number) * 1000;
-		const emitResults = this.getNodeParameter('emitResults', true) as boolean;
 		const transport = this.getNodeParameter('transport', 'polling') as 'polling' | 'websocket';
 
 		const queueUrl = String(credentials.queueUrl || '').replace(/\/+$/, '');
@@ -160,14 +128,6 @@ export class LoopthinkRunner implements INodeType {
 
 		const base = `${queueUrl}/group/${workspaceId}/${groupId}/runner`;
 
-		// Optional: a group may point at an API that needs no secret at all.
-		let secrets: Record<string, string> = {};
-		try {
-			secrets = secretsFromCredential(await this.getCredentials('loopthinkTargetApi'));
-		} catch {
-			// Not configured — a request carrying no placeholder still works.
-		}
-
 		let stopped = false;
 		let timer: NodeJS.Timeout | undefined;
 
@@ -190,83 +150,9 @@ export class LoopthinkRunner implements INodeType {
 			return response.body as QueuedRequest;
 		};
 
-		const report = async (requestId: string, result: IDataObject): Promise<void> => {
-			await this.helpers.httpRequest({
-				method: 'POST',
-				url: `${base}/request/${requestId}/result`,
-				headers: { Authorization: `Bearer ${secret}` },
-				body: result,
-				json: true,
-			});
-		};
-
-		const execute = async (job: QueuedRequest, request: HttpPayload): Promise<IDataObject> => {
-			try {
-				// Placeholders are filled in here and nowhere else. `resolved` must
-				// never be logged or emitted — it holds the actual secrets.
-				const resolved = substituteSecrets(request, secrets);
-
-				// Assembled here, after substitution: encoding a {{secret.NAME}}
-				// placeholder first would hide it behind %7B%7B…%7D%7D, and it would
-				// travel to the target unresolved and unreported.
-				const url = new URL(resolved.url);
-				Object.entries(resolved.query || {}).forEach(([key, value]) =>
-					url.searchParams.set(key, String(value)),
-				);
-
-				const response = await this.helpers.httpRequest({
-					method: (resolved.method || 'GET') as any,
-					url: url.toString(),
-					headers: resolved.headers || {},
-					body: resolved.body ?? undefined,
-					json: true,
-					timeout: requestTimeout,
-					returnFullResponse: true,
-					ignoreHttpStatusErrors: true,
-				});
-
-				// Masking happens here, before anything leaves this network. An
-				// unmasked payload must never be what travels back.
-				const masked = applyMasking(response.body, rulesForScope(job.masking || [], job.scope));
-				return { status: response.statusCode, data: masked };
-			} catch (error) {
-				// A missing secret is an operator problem, not a transient one — the
-				// message names which, so it can be fixed without guesswork.
-				if (error instanceof MissingSecretError) {
-					this.logger.warn(`loopthink Runner: ${error.message}`);
-				}
-				// Report the failure rather than swallowing it: the caller in the
-				// cloud is blocking on an answer and would otherwise wait out the
-				// full timeout for something that already failed.
-				return { error: (error as Error).message };
-			}
-		};
-
-		// What happens to a claimed call, whichever transport brought it. Shared so
-		// the two cannot drift into answering the same tool differently.
+		// One shape for both transports: claimed work goes out, nothing is run here.
 		const handle = async (job: QueuedRequest): Promise<void> => {
-			if (isParamsRequest(job.request)) {
-				emitWorkflowTool(this, job, job.request);
-				return;
-			}
-			const request = job.request;
-			const result = await execute(job, request);
-			await report(job.requestId, result);
-
-			if (emitResults) {
-				emitOn(this, EXECUTED_OUTPUT, {
-					requestId: job.requestId,
-					tool: job.tool,
-					method: request.method,
-					// The queued form, with placeholders unresolved — the substituted
-					// URL can hold a secret, and this lands in n8n's execution records.
-					url: request.url,
-					status: result.status ?? null,
-					error: result.error ?? null,
-					maskingRules: (job.masking || []).length,
-					transport,
-				});
-			}
+			emitJob(this, job);
 		};
 
 		if (transport === 'websocket') {

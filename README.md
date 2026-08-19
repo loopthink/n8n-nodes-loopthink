@@ -17,18 +17,22 @@ Claude ──► loopthink ──► queue ──┐
                           masked result ──► loopthink ──► Claude
 ```
 
-## Two kinds of tool
+## Two kinds of tool, one shape
 
-**HTTP tools** the node executes itself: loopthink resolves the whole call and
-the runner issues it. Nothing else is needed.
+**HTTP tools** are calls loopthink resolved in full: method, URL, headers, body.
+**Workflow tools** are calls it cannot resolve, because the source has no address
+— an n8n Data Table, a Sheet, a database, any node-only integration — so it sends
+the validated arguments instead.
 
-**Workflow tools** the node cannot execute, and is not meant to. Their source has
-no address to call — an n8n Data Table, a Sheet, a database, any node-only
-integration — so loopthink sends the validated arguments and *your workflow*
-answers. Name them under **Workflow Tools** on the runner node and each gets an
-output of its own, labelled with the tool name; end that branch with a
-**loopthink Result** node. A tool that arrives but is not listed is answered with
-a clean error rather than left to time out.
+Both leave the Runner on the same output. A Switch on `{{$json.tool}}` decides
+what happens: a workflow tool goes to the branch that answers it, an HTTP tool to
+a branch with **loopthink → Execute Request**, and every branch ends in
+**loopthink → Send Result**. Give the Switch a fallback, or a tool nobody answers
+leaves the caller waiting out its timeout.
+
+One branch covers every HTTP tool of a server, because the call is already
+resolved: point Execute Request at `{{ $json.request }}` and it runs whichever
+one arrived.
 
 See [examples/](examples) for three working workflows: over an n8n Data Table,
 over Postgres, and over an HTTP API.
@@ -117,9 +121,16 @@ between. Sometimes an API leaves no choice — but prefer a header where you hav
 
 ## The loopthink node
 
-It does one thing: mask the answer and send it back. Masking is not a setting on
-it — the only way to answer a call is through this node, so an unmasked result is
-not something a workflow can send by forgetting a step.
+**Send Result** masks the answer and sends it back. Masking is not a setting on
+it: the only way to answer a call is through this operation, so an unmasked
+result is not something a workflow can send by forgetting a step. Its output
+carries the masked payload as `sent`, so what left the network is something you
+can read rather than take on trust.
+
+**Execute Request** issues an HTTP tool's call and fills in `{{secret.NAME}}` from
+the **Secrets** credential on the way out. That substitution is the reason this
+is not a plain HTTP Request node: handed the placeholder, a standard node sends
+it verbatim and it lands in the target's access log.
 
 There was briefly a second operation that built index pages, and it turned out to
 be earning its place from a limitation that was not there. Paging by **cursor**

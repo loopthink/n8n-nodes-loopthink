@@ -128,6 +128,15 @@ export async function executeResult(this: IExecuteFunctions): Promise<INodeExecu
 		json: true,
 	});
 
+	// The masked payload is part of the output, not just the bookkeeping: this is
+	// the node where you check what actually left the network, and "it was sent"
+	// is a weaker answer than showing the thing that was sent.
+	//
+	// It costs nothing in exposure. The unmasked rows are already in this
+	// execution's data on the node before this one, so the masked copy is the
+	// less sensitive of the two — and it is by definition what already travelled
+	// to the platform.
+	//
 	// A duplicate is not a failure: delivery is at-least-once, and the first
 	// answer is the one the waiting caller already read. Reported rather than
 	// thrown so a retry does not turn a healthy workflow red.
@@ -137,9 +146,10 @@ export async function executeResult(this: IExecuteFunctions): Promise<INodeExecu
 				requestId,
 				status: body.status ?? null,
 				error: body.error ?? null,
+				maskingRules: (request.masking ?? []).length,
 				accepted: (response as IDataObject)?.accepted ?? null,
 				duplicate: (response as IDataObject)?.duplicate ?? null,
-				maskingRules: (request.masking ?? []).length,
+				sent: body.data ?? null,
 			},
 		]),
 	];

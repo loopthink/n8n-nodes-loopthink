@@ -5,18 +5,20 @@ import type {
 	INodeTypeDescription,
 } from 'n8n-workflow';
 
+import { executeRequest, executeFields } from './execute.operation';
 import { executeResult, resultFields } from './result.operation';
 
 /**
  * loopthink — what a workflow does with a claimed tool call.
  *
- * Deliberately one thing: mask the answer and send it. There was a second
- * operation that built index pages, and it turned out to be a node earning its
- * place from a limitation that was not there. Paging by cursor rather than
- * offset makes the source do the work — a `<` on a unique key with a Limit,
- * which both the Data Table node and SQL express natively — and n8n's own
- * Aggregate node bundles and trims the rows. Nothing was left for ours to do
- * that a standard node did not already do better.
+ * Two operations, and both earn it by doing something no standard node can.
+ * Send Result masks with rules that arrived alongside the request. Execute
+ * Request resolves `{{secret.NAME}}` before issuing the call, which a plain HTTP
+ * Request node would forward verbatim into the target's access log.
+ *
+ * A third one built index pages and has been removed: it earned its place from a
+ * limitation that was not there. Paging by cursor rather than offset lets the
+ * source do the work, and n8n's own Aggregate node bundles and trims the rows.
  *
  * The runner stays separate. It is a trigger: no inputs, a lifecycle of its own,
  * and n8n cannot combine a trigger with a regular node.
@@ -34,7 +36,21 @@ export class Loopthink implements INodeType {
 		inputs: ['main'],
 		outputs: ['main'],
 		credentials: [
-			{ name: 'loopthinkRunnerApi', required: true, displayName: 'Authentication' },
+			{
+				name: 'loopthinkRunnerApi',
+				required: true,
+				displayName: 'Authentication',
+				displayOptions: { show: { operation: ['result'] } },
+			},
+			{
+				// Only the executing operation needs them: a workflow that answers
+				// Data Table tools should not carry a credential for an API it never
+				// calls.
+				name: 'loopthinkTargetApi',
+				required: false,
+				displayName: 'Secrets',
+				displayOptions: { show: { operation: ['execute'] } },
+			},
 		],
 		properties: [
 			{
@@ -50,13 +66,27 @@ export class Loopthink implements INodeType {
 						description: 'Mask the answer and send it back to loopthink',
 						action: 'Send the result back to loopthink',
 					},
+					{
+						name: 'Execute Request',
+						value: 'execute',
+						description: 'Issue the HTTP call loopthink resolved, filling in your secrets',
+						action: 'Execute the resolved HTTP request',
+					},
 				],
 			},
-			...resultFields,
+			...resultFields.map((field) => ({
+				...field,
+				displayOptions: { ...field.displayOptions, show: { ...field.displayOptions?.show, operation: ['result'] } },
+			})),
+			...executeFields.map((field) => ({
+				...field,
+				displayOptions: { ...field.displayOptions, show: { ...field.displayOptions?.show, operation: ['execute'] } },
+			})),
 		],
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
-		return executeResult.call(this);
+		const operation = this.getNodeParameter('operation', 0) as 'result' | 'execute';
+		return operation === 'execute' ? executeRequest.call(this) : executeResult.call(this);
 	}
 }

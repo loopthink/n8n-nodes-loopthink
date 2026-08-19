@@ -57,46 +57,40 @@ export function isParamsRequest(request: QueuedRequest['request']): request is P
 }
 
 /**
- * Two outputs, always, because a runner produces two kinds of thing: calls it
- * already handled, and calls only this workflow can answer. Fixed rather than
- * derived from configuration, so no edit anywhere can renumber them under a
- * connection that is already drawn.
+ * One output. The runner claims work and emits it; what to do with a call is the
+ * workflow's decision, routed by tool name where the names are readable.
+ *
+ * It had two for a while, "Executed" and "To Answer", because the node used to
+ * run HTTP tools itself and those were already answered by the time they
+ * appeared. Executing moved out to the loopthink node, and the distinction went
+ * with it.
  */
 export const RUNNER_OUTPUTS: INodeOutputConfiguration[] = [
 	// 'main' as a literal: n8n-workflow 2.x exposes NodeConnectionType as a type
 	// rather than an enum value, so there is nothing to reference here.
-	{ type: 'main' as INodeOutputConfiguration['type'], displayName: 'Executed' },
-	{ type: 'main' as INodeOutputConfiguration['type'], displayName: 'To Answer' },
+	{ type: 'main' as INodeOutputConfiguration['type'] },
 ];
 
-export const EXECUTED_OUTPUT = 0;
-export const TO_ANSWER_OUTPUT = 1;
-
-/** this.emit expects one slot per output; the unused ones stay empty. */
-export function emitOn(ctx: ITriggerFunctions, index: number, item: IDataObject): void {
-	const slots: ReturnType<typeof ctx.helpers.returnJsonArray>[] = RUNNER_OUTPUTS.map(() => []);
-	slots[index] = ctx.helpers.returnJsonArray([item]);
-	ctx.emit(slots);
-}
-
 /**
- * Hands a workflow tool to the branch that answers it.
+ * Emits a claimed call for the workflow to handle.
  *
- * The masking rules travel with the item because the Result node applies them:
- * they arrive fresh with every request, which is what keeps a rule change from
- * needing a workflow edit.
+ * `request` travels as it arrived, http or params, so one branch reads
+ * `$json.request.url` and another `$json.params`. The masking rules come along
+ * because Send Result applies them: they arrive fresh with every request, which
+ * is what keeps a rule change from needing a workflow edit.
  */
-export function emitWorkflowTool(
-	ctx: ITriggerFunctions,
-	job: QueuedRequest,
-	request: ParamsPayload,
-): void {
-	emitOn(ctx, TO_ANSWER_OUTPUT, {
-		requestId: job.requestId,
-		tool: job.tool,
-		params: request.params ?? {},
-		masking: job.masking ?? [],
-		scope: job.scope ?? null,
-		leaseUntil: job.leaseUntil,
-	});
+export function emitJob(ctx: ITriggerFunctions, job: QueuedRequest): void {
+	ctx.emit([
+		ctx.helpers.returnJsonArray([
+			{
+				requestId: job.requestId,
+				tool: job.tool,
+				request: job.request as unknown as IDataObject,
+				params: isParamsRequest(job.request) ? job.request.params : {},
+				masking: job.masking ?? [],
+				scope: job.scope ?? null,
+				leaseUntil: job.leaseUntil,
+			},
+		]),
+	]);
 }

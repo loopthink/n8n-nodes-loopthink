@@ -4,9 +4,7 @@
     {
       "parameters": {
         "transport": "polling",
-        "pollInterval": 2,
-        "requestTimeout": 30,
-        "emitResults": true
+        "pollInterval": 2
       },
       "id": "loopthink-runner",
       "name": "loopthink Runner",
@@ -296,7 +294,6 @@
   "connections": {
     "loopthink Runner": {
       "main": [
-        [],
         [
           {
             "node": "Route by tool",
