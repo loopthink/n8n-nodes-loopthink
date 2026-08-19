@@ -98,14 +98,13 @@
         "ranges": {
           "range": [
             {
+              "column": "id",
+              "type": "number"
+            },
+            {
               "column": "createdAt",
               "type": "date",
               "parameter": "created"
-            },
-            {
-              "column": "updatedAt",
-              "type": "date",
-              "parameter": "updated"
             }
           ]
         },
@@ -141,38 +140,33 @@
           "conditions": [
             {
               "keyName": "id",
-              "condition": "={{ $json.q.id.condition }}",
-              "keyValue": "={{ $json.q.id.value }}"
+              "condition": "gt",
+              "keyValue": "={{ $json.q.id_min }}"
+            },
+            {
+              "keyName": "id",
+              "condition": "lt",
+              "keyValue": "={{ $json.q.id_max }}"
             },
             {
               "keyName": "createdAt",
-              "condition": "={{ $json.q.createdAt_min.condition }}",
-              "keyValue": "={{ $json.q.createdAt_min.value }}"
+              "condition": "gte",
+              "keyValue": "={{ $json.q.createdAt_min }}"
             },
             {
               "keyName": "createdAt",
-              "condition": "={{ $json.q.createdAt_max.condition }}",
-              "keyValue": "={{ $json.q.createdAt_max.value }}"
-            },
-            {
-              "keyName": "updatedAt",
-              "condition": "={{ $json.q.updatedAt_min.condition }}",
-              "keyValue": "={{ $json.q.updatedAt_min.value }}"
-            },
-            {
-              "keyName": "updatedAt",
-              "condition": "={{ $json.q.updatedAt_max.condition }}",
-              "keyValue": "={{ $json.q.updatedAt_max.value }}"
+              "condition": "lte",
+              "keyValue": "={{ $json.q.createdAt_max }}"
             },
             {
               "keyName": "country",
-              "condition": "={{ $json.q.country.condition }}",
-              "keyValue": "={{ $json.q.country.value }}"
+              "condition": "ilike",
+              "keyValue": "={{ $json.q.country }}"
             }
           ]
         },
         "returnAll": false,
-        "limit": "={{ $json.q.limit }}",
+        "limit": "={{ $json.q.fetch }}",
         "orderBy": true,
         "orderByColumn": "id",
         "orderByDirection": "={{ $json.q.order }}",
@@ -213,7 +207,6 @@
         "request": "={{ $('loopthink Runner').first().json }}",
         "respondWith": "page",
         "status": 200,
-        "cursorField": "id",
         "pageSize": "={{ $('Prepare query').first().json.q.limit }}"
       },
       "id": "answer-index",

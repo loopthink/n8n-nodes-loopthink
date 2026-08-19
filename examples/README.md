@@ -21,13 +21,14 @@ can read them.
 | | [data-table.json](data-table.json) | [postgres.json](postgres.json) | [http-api.json](http-api.json) |
 |---|---|---|---|
 | Source | n8n Data Table | Postgres | any HTTP API |
-| Cursor key | row `id` | `(created_at, id)`, selected as one `cursor` column | whatever the API pages by |
-| Filter, sort, page | Prepare Query → the Data Table node | `WHERE` / `ORDER BY` / `LIMIT` | the API's own parameters |
+| Read on from | `id_after` | `id_after` | `id_after` |
+| Filter, sort, limit | Prepare Query → the Data Table node | `WHERE` / `ORDER BY` / `LIMIT` | the API's own parameters |
 | Trim the columns | Edit Fields | Edit Fields | Edit Fields |
-| `nextCursor`, `hasMore` | Send Result, **Page of Objects** | same | same |
+| `truncated` | Send Result, **Capped List** | same | same |
 
-**The source does all of it.** Paging by cursor rather than offset is what makes
-that possible: `id < c` with a Limit is one comparison the source can do itself,
+**The source does all of it.** Reading on by id rather than by offset is what
+makes that possible: `id > 8` with a Limit is one comparison the source can do
+itself,
 and it hands back only the page. Offset made it hand over every row so the
 workflow could slice them, and it shifted the whole listing under the caller
 whenever a row was inserted between two pages.
@@ -47,24 +48,23 @@ character and quietly produces one empty condition per character).
 So the rows have to be there whether or not the call filled them, and each one
 needs a value that cannot exclude anything when it was not filled. **Prepare
 Query** produces those values: a range gets a bound so far outside the data that
-the comparison is free, an optional match gets a wildcard, and the first page
-starts at the far end.
+the comparison is free, and an optional match gets a wildcard.
 
-Every entry has the same two fields, so every row is wired the same way:
+One key, one plain value. The comparison is chosen once from the dropdown, so it
+is not in the data:
 
-| Row | Column | Condition | Value |
+| Row | Column | Comparison | Value |
 |---|---|---|---|
-| cursor | `id` | `{{ $json.q.id.condition }}` | `{{ $json.q.id.value }}` |
-| range, lower | `createdAt` | `{{ $json.q.createdAt_min.condition }}` | `{{ $json.q.createdAt_min.value }}` |
-| range, upper | `createdAt` | `{{ $json.q.createdAt_max.condition }}` | `{{ $json.q.createdAt_max.value }}` |
-| optional match | `country` | `{{ $json.q.country.condition }}` | `{{ $json.q.country.value }}` |
+| range, lower | `createdAt` | Or Later | `{{ $json.q.createdAt_min }}` |
+| range, upper | `createdAt` | Or Earlier | `{{ $json.q.createdAt_max }}` |
+| optional match | `country` | Contains | `{{ $json.q.country }}` |
+| read on | `id` | Greater Than | `{{ $json.q.id_min }}` |
 
-The cursor row is always `id`: n8n gives every data table one, and it is the only
-column keyset paging can trust, so the node does not offer the choice.
+Limit is `{{ $json.q.fetch }}`, one more than the answer carries, and Order is
+`{{ $json.q.order }}`.
 
-Pick the column, then paste the same pair with the column's key. Which comparison
-a row needs is the node's decision: an equals where a bound belongs still runs,
-it just answers with nothing.
+Reading on is not a mechanism of its own. It is a range on `id` configured like
+any other, which is why nothing here knows the word cursor.
 
 ## Import
 
@@ -92,20 +92,24 @@ answer it, branch or no branch.
 
 | Parameter | Type | Meaning |
 |---|---|---|
-| `limit` | number | Rows per page, default 20 |
-| `cursor` | string | `nextCursor` from the previous response; omit for the first page |
-| `sort` | string | `newest` (default) or `oldest`, by creation date |
+| `limit` | number | Rows in one answer, default 20 |
+| `sort` | string | `newest` (default) or `oldest`, by id, which is insertion order |
+| `id_after` | number | The last id you were given, to read on from there |
 | `created_after` / `created_before` | string | ISO bounds on the creation date |
-| `updated_after` / `updated_before` | string | ISO bounds on the last change |
+| `country` | string | Only that country, omit for all |
 
-Returns `{ items, nextCursor, hasMore }`, the same shape n8n's own public API
-uses. `items` carries id, name, country and the creation date, deliberately not
-the whole record.
+Returns `{ items, truncated }`. `items` carries id, name, country and the
+creation date, deliberately not the whole record.
 
-No `total`: counting is a second query, and with a cursor the only question is
-whether to ask again. `hasMore` answers that: a full page is the sole evidence
-there may be more, so a listing that ends on an exact multiple of `limit` costs
-one extra call to discover it is finished.
+There is no cursor and no `total`. The branch reads one row more than the limit;
+if that extra row arrives, the answer is marked `truncated` and the extra row is
+dropped. A model that sees it either narrows the filters or passes `id_after`
+with the last id it was given. Both are ordinary filters it already understands,
+so nothing opaque travels back and forth, and it can bisect a large range instead
+of only walking forward.
+
+Counting would be a second query for a number nobody acts on. The only question a
+model has is whether to ask again, and `truncated` answers exactly that.
 
 `*_show` takes a required `id` and returns the full record.
 
@@ -122,43 +126,50 @@ one that carries it.
 
 ## Notes per source
 
-**n8n Data Table.** The cursor is the row `id`, not `createdAt`. A condition list
+**n8n Data Table.** Reading on is by `id`, never by `createdAt`. A condition list
 here is all ANDed or all ORed, so the `(createdAt, id)` tiebreak a non-unique sort
 key needs cannot be written, and a strict `<` on a non-unique key silently skips
 every row sharing the boundary value. Three of the seeded rows share a
-millisecond, so this is not hypothetical. The id is unique and ascends with
-insertion, so ordering by it is insertion order.
+millisecond, so this is not hypothetical. n8n gives every data table an
+`id integer PRIMARY KEY`, unique and ascending with insertion, so ordering by it
+is insertion order and no boundary can be ambiguous.
+
+The `id` row is compared with **Greater Than**, not Or Later. That is what makes
+`id_after` mean what it says instead of returning the boundary row a second time.
 
 Bounds are filled with sentinels (`0001-01-01`, `9999-12-31`, a huge id) rather than
 being left out, because a condition with an empty value fails with `Invalid date
 string ''`. A sentinel keeps the condition list fixed and lets an absent
 parameter mean "no bound".
 
-**Postgres.** SQL can express the tiebreak the Data Table cannot, so here the
-order really is by date with the id only deciding ties:
+**Postgres.** The whole query is one expression, so nothing here needs Prepare
+Query. An absent bound simply drops out of the predicate:
 
 ```sql
 WHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
-  AND ($5::timestamptz IS NULL OR (created_at, id) < ($5::timestamptz, $6::int))
-ORDER BY created_at DESC, id DESC
-LIMIT $7
+  AND ($3::int IS NULL OR id > $3::int)
+ORDER BY id DESC
+LIMIT $5
 ```
 
-The cursor is `"<iso>|<id>"`, opaque to the caller. Send Result reads one named
-field, so the pair is assembled in the SELECT as a `cursor` column and travels
-with each row: any row in a page can be the one you continue from. Bounds are parameters and are
-cast, so an absent one is a real `NULL` and the predicate drops out; passing `''`
-instead fails the cast. The two things SQL cannot take as parameters, the sort
-direction and the comparison operator, are interpolated from one expression that
-can only ever produce `ASC`/`DESC` and `<`/`>`, a whitelist by construction. Never
-interpolate the raw tool parameter there.
+Bounds are parameters and are cast, so an absent one is a real `NULL`; passing
+`''` instead fails the cast. The sort direction is the one thing SQL cannot take
+as a parameter, and it is interpolated from an expression that can only ever
+produce `ASC` or `DESC`, a whitelist by construction. Never interpolate a raw
+tool parameter there.
+
+An earlier version paged on the pair `(created_at, id)`, because ordering by a
+timestamp alone skips rows that share a boundary value. Ordering by `id` makes
+the pair unnecessary: it is unique, so no boundary is ambiguous, and the tool
+exposes one plain `id_after` instead of an opaque `"<iso>|<id>"` token.
 
 **HTTP API.** Use this when the platform cannot describe the call on its own: a
 body to assemble, a response to reshape, a call to make first. A plain GET
 against a documented path needs none of it; author that in loopthink as an HTTP
 tool and the runner issues it with no workflow at all.
 
-An API that pages by its own token is the easy case: hand the cursor back
-untouched and read the next one out of the response instead of off the last row.
-Credentials for your own API stay in n8n, on the HTTP Request node. Verified
+If the API pages by a token of its own, give the tool a parameter for it and read
+the next one out of the response. The example does the simpler thing and passes
+`id_after` and `limit + 1` straight into the query string. Credentials for your
+own API stay in n8n, on the HTTP Request node. Verified
 against a public JSON list API standing in for a customer's own.

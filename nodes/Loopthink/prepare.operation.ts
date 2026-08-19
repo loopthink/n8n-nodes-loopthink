@@ -18,7 +18,7 @@ import { prepareQuery, type MatchSpec, type RangeSpec } from './query';
  * and the sentinel that keeps an unused row harmless is pasted into the
  * workflow four or five times, where it is neither named nor tested.
  *
- * After it, a row reads `{{ $json.q.createdAt.min }}` and the sentinel lives
+ * After it, a row reads `{{ $json.q.createdAt_min }}` and the sentinel lives
  * here, with the reason it has that value.
  */
 
@@ -32,12 +32,13 @@ export const prepareFields: INodeProperties[] = [
 			'What the model sent. Leave this as it is unless the branch reshapes the item first.',
 	},
 	{
-		displayName: 'Rows per Page',
+		displayName: 'Rows per Answer',
 		name: 'defaultLimit',
 		type: 'number',
 		typeOptions: { minValue: 1, maxValue: 500 },
 		default: 20,
-		description: 'Used when the call sends no limit. A larger limit than this is capped to it.',
+		description:
+			'The most rows a single answer carries. Used when the call sends no limit, and a larger limit is capped to it.',
 	},
 	{
 		displayName: 'Order',
@@ -48,7 +49,8 @@ export const prepareFields: INodeProperties[] = [
 			{ name: 'Newest First', value: 'DESC' },
 			{ name: 'Oldest First', value: 'ASC' },
 		],
-		description: 'Used unless the call sends a sort parameter of "oldest" or "newest"',
+		description:
+			'Used unless the call sends a sort parameter of "oldest" or "newest". Ascending by id is also what lets a model read a long list in order.',
 	},
 	{
 		displayName: 'Optional Ranges',
@@ -58,7 +60,7 @@ export const prepareFields: INodeProperties[] = [
 		typeOptions: { multipleValues: true },
 		default: {},
 		description:
-			'One entry per column the tool can narrow down. Each yields a min and a max, filled from the call or opened all the way up.',
+			'One entry per column the tool can narrow down. Each yields a min and a max, filled from the call or opened all the way up. A range on id is what lets a model continue past the last row it saw.',
 		options: [
 			{
 				name: 'range',
@@ -70,7 +72,8 @@ export const prepareFields: INodeProperties[] = [
 						type: 'string',
 						default: '',
 						placeholder: 'createdAt',
-						description: 'Also the key it appears under, as q.createdAt_min and q.createdAt_max',
+						description:
+					'Also the stem of the two keys it appears under, as q.createdAt_min and q.createdAt_max',
 					},
 					{
 						displayName: 'Type',
@@ -129,10 +132,8 @@ export const prepareFields: INodeProperties[] = [
 		],
 	},
 	{
-		// q.id is a key in the emitted object, not a label; upper-casing it would
-		// name something that does not exist.
-		// eslint-disable-next-line n8n-nodes-base/node-param-display-name-miscased-id
-		displayName: 'Every condition row in the Data Table node is filled the same way: pick the column, then set <b>Condition</b> to <code>{{ $json.q.&lt;key&gt;.condition }}</code> and <b>Value</b> to <code>{{ $json.q.&lt;key&gt;.value }}</code>. The key is the column name: <code>q.id</code> for the cursor, which is always <code>id</code> because n8n gives every data table one, and <code>q.status</code> for a match. A range needs two rows, <code>q.&lt;column&gt;_min</code> and <code>q.&lt;column&gt;_max</code>. Limit is <code>q.limit</code>, sort direction <code>q.order</code>. Every key holds a value on every call, so no row has to be removed for a parameter the model left out. <code>q.unused</code> lists parameters the tool declares that no row here reads: a filter the model was invited to send and that quietly does nothing.',
+		displayName:
+			'Each key holds one value, so a condition row is <b>column</b>, a comparison you pick once, and <code>{{ $json.q.&lt;key&gt; }}</code> in <b>Value</b>. A range yields two keys, <code>q.&lt;column&gt;_min</code> and <code>q.&lt;column&gt;_max</code>; a match yields one, <code>q.&lt;column&gt;</code>, compared with <b>contains</b>. Set <b>Limit</b> to <code>q.fetch</code> and <b>Order</b> to <code>q.order</code>. Every key holds a value on every call, so no row has to be removed for a parameter the model left out, and <code>q.unused</code> names any the tool offers that no row reads.',
 		name: 'prepareNotice',
 		type: 'notice',
 		default: '',

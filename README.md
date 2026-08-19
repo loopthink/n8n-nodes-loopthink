@@ -127,11 +127,16 @@ result is not something a workflow can send by forgetting a step. Its output
 carries the masked payload as `sent`, so what left the network is something you
 can read rather than take on trust.
 
-Answering an index tool, set it to **Page of Objects**: it bundles the rows and
-hands out `nextCursor` from the last one, but only when the page came back full,
-because after a short page a cursor buys one more round trip that is certain to
-return nothing, and a model reads an empty page as an error rather than as an
-ending.
+Answering a listing tool, set it to **Capped List**. The branch reads one row
+more than the limit; if that extra row arrives there was more, and the answer
+says `truncated: true` without the extra row in it. That is the whole paging
+mechanism, and it needs no total, which the Data Table node does not hand out
+anyway.
+
+There is no cursor. A model told `truncated` narrows its filters, or continues
+past the last id it was given by passing `id_after`. Both are ordinary filters it
+already understands, so nothing opaque travels back and forth and the model can
+also bisect a large range instead of only walking forward.
 
 **Execute Request** issues an HTTP tool's call and fills in `{{secret.NAME}}` from
 the **Secrets** credential on the way out. That substitution is the reason this
@@ -146,19 +151,23 @@ and the list as a whole cannot be computed: handed a string, n8n walks it
 character by character and quietly produces one empty condition per character.
 
 So every row has to hold a value on every call. Prepare Query produces them: a
-bound so far outside the data that the comparison is free, a wildcard for an
-optional match, the far end for the first page. Every entry gets the same
-two fields, so each row is wired the same way:
+bound so far outside the data that the comparison is free, and a wildcard for an
+optional match. One key, one plain value:
 
-| | Column | Condition | Value |
+| | Column | Comparison | Value |
 |---|---|---|---|
-| cursor | `id` | `{{ $json.q.id.condition }}` | `{{ $json.q.id.value }}` |
-| range | `createdAt` | `{{ $json.q.createdAt_min.condition }}` | `{{ $json.q.createdAt_min.value }}` |
-| match | `status` | `{{ $json.q.status.condition }}` | `{{ $json.q.status.value }}` |
+| range, lower | `createdAt` | Or Later | `{{ $json.q.createdAt_min }}` |
+| range, upper | `createdAt` | Or Earlier | `{{ $json.q.createdAt_max }}` |
+| match | `status` | Contains | `{{ $json.q.status }}` |
+| read on | `id` | Greater Than | `{{ $json.q.id_min }}` |
 
-Which comparison a row needs is the node's decision, not the workflow author's.
-Getting it wrong is silent: an equals where a bound belongs still runs, it just
-answers with nothing.
+The comparison is chosen once from the dropdown and never changes, so it is not
+in the data. Set **Limit** to `{{ $json.q.fetch }}`, which is one more than the
+limit, and **Order** to `{{ $json.q.order }}`.
+
+A range on `id` is what lets a model read on, and it is configured exactly like
+any other range. Compare it with **Greater Than** rather than Or Later, so that
+`id_after` means what it says and the boundary row is not returned twice.
 
 ![Prepare Query](https://raw.githubusercontent.com/loopthink/n8n-nodes-loopthink/main/docs/prepare-query.png)
 ![The Data Table node reading from it](https://raw.githubusercontent.com/loopthink/n8n-nodes-loopthink/main/docs/read-bookings.png)

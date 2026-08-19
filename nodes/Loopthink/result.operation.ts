@@ -15,12 +15,16 @@ import { applyMasking, rulesForScope, type MaskingRule } from '../LoopthinkRunne
  */
 
 /**
- * The envelope an index tool answers with.
+ * The envelope a listing tool answers with.
  *
- * A cursor is handed out only when the page came back full. After a short page
- * there is nothing left, and a cursor would buy one more round trip that is
- * certain to return an empty page — which a model reads as an error rather than
- * as an ending.
+ * There is no cursor. The branch reads one row more than it answers with, and
+ * that extra row is the whole mechanism: if it arrived, there was more. It costs
+ * nothing, it is exact, and it needs no total, which the Data Table node does
+ * not hand out anyway.
+ *
+ * A model told `truncated` narrows its filters, or continues past the last id it
+ * saw. Both are ordinary filters it already understands, which is why no opaque
+ * token travels back and forth.
  */
 function pagePayload(
 	ctx: IExecuteFunctions,
@@ -32,13 +36,12 @@ function pagePayload(
 	const rows = items.map((item) => item.json as IDataObject);
 	if (respondWith === 'list') return rows as unknown as IDataObject;
 
-	const cursorField = ctx.getNodeParameter('cursorField', 0) as string;
-	const pageSize = Number(ctx.getNodeParameter('pageSize', 0));
-	const full = Number.isFinite(pageSize) && pageSize > 0 && rows.length >= pageSize;
-	const last = rows[rows.length - 1];
-	const nextCursor = full && last ? ((last[cursorField] as string | number) ?? null) : null;
+	const limit = Number(ctx.getNodeParameter('pageSize', 0));
+	const capped = Number.isFinite(limit) && limit > 0;
 
-	return { items: rows, nextCursor, hasMore: nextCursor !== null };
+	// The extra row is evidence, not content. Sending it would answer with one
+	// more than was asked for, and quietly change what `limit` means.
+	return { items: capped ? rows.slice(0, limit) : rows, truncated: capped && rows.length > limit };
 }
 
 interface QueuedRequestRef {
@@ -84,10 +87,10 @@ export const resultFields: INodeProperties[] = [
 					description: 'Every input item as an array',
 				},
 				{
-					name: 'Page of Objects',
+					name: 'Capped List',
 					value: 'page',
 					description:
-						'Every input item, plus the cursor for the next page. What an index tool answers with.',
+						'Up to the limit, plus a flag saying whether there was more. What a listing tool answers with.',
 				},
 				{
 					name: 'Error',
@@ -97,25 +100,17 @@ export const resultFields: INodeProperties[] = [
 			],
 		},
 		{
-			displayName: 'Cursor Field',
-			name: 'cursorField',
-			type: 'string',
-			default: 'id',
-			displayOptions: { show: { respondWith: ['page'] } },
-			description:
-				'The field the table was sorted by. Its value in the last row becomes nextCursor, which the model sends back to ask for the page after this one.',
-		},
-		{
-			displayName: 'Page Size',
+			displayName: 'Limit',
 			name: 'pageSize',
 			type: 'number',
-			// eslint-disable-next-line n8n-nodes-base/node-param-default-wrong-for-number -- the
-			// useful default is the page size the query was built with, which is an
-			// expression. A literal would quietly disagree with it.
-			default: 0,
+			// The useful default is the limit the query was built with, which is an
+			// expression; a literal would quietly disagree with it. The comment has
+			// to sit directly above the property or --fix replaces the default.
+			// eslint-disable-next-line n8n-nodes-base/node-param-default-wrong-for-number
+			default: "={{ $('Prepare query').first().json.q.limit }}",
 			displayOptions: { show: { respondWith: ['page'] } },
 			description:
-				'How many rows a full page holds. A short page means there is nothing after it, so no cursor is handed out and the model stops asking.',
+				'How many rows to answer with. Read one more than this in the branch: if the extra row arrives, the answer is marked truncated.',
 		},
 		{
 			displayName: 'Status',

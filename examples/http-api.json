@@ -95,7 +95,7 @@
         "url": "=<API_BASE_URL>/customers",
         "sendQuery": true,
         "specifyQuery": "json",
-        "jsonQuery": "={{ JSON.stringify({ after: $json.params.cursor || undefined, limit: $json.params.limit || 20, created_after: $json.params.created_after || undefined }) }}",
+        "jsonQuery": "={{ JSON.stringify({ id_after: $json.params.id_after || undefined, limit: ($json.params.limit || 20) + 1, created_after: $json.params.created_after || undefined }) }}",
         "options": {
           "response": {
             "response": {
@@ -160,7 +160,6 @@
         "request": "={{ $('loopthink Runner').first().json }}",
         "respondWith": "page",
         "status": 200,
-        "cursorField": "id",
         "pageSize": "={{ $('loopthink Runner').first().json.params.limit || 20 }}"
       },
       "id": "answer-index",

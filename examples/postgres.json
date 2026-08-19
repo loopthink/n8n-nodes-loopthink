@@ -92,9 +92,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=SELECT id, name, country, created_at, updated_at,\n       created_at::text || '|' || id::text AS cursor\nFROM customers\nWHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)\n  AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)\n  AND ($3::timestamptz IS NULL OR updated_at >= $3::timestamptz)\n  AND ($4::timestamptz IS NULL OR updated_at <= $4::timestamptz)\n  AND ($5::timestamptz IS NULL OR (created_at, id) {{ $('loopthink Runner').first().json.params.sort !== 'oldest' ? '<' : '>' }} ($5::timestamptz, $6::int))\nORDER BY created_at {{ $('loopthink Runner').first().json.params.sort !== 'oldest' ? 'DESC' : 'ASC' }}, id {{ $('loopthink Runner').first().json.params.sort !== 'oldest' ? 'DESC' : 'ASC' }}\nLIMIT $7",
+        "query": "=SELECT id, name, country, created_at, updated_at\nFROM customers\nWHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)\n  AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)\n  AND ($3::int IS NULL OR id > $3::int)\n  AND ($4::text IS NULL OR country ILIKE $4::text)\nORDER BY id {{ $json.params.sort === 'oldest' ? 'ASC' : 'DESC' }}\nLIMIT $5",
         "options": {
-          "queryReplacement": "={{ [ $json.params.created_after || null, $json.params.created_before || null, $json.params.updated_after || null, $json.params.updated_before || null, ($json.params.cursor || '').split('|')[0] || null, Number(($json.params.cursor || '').split('|')[1]) || 0, $json.params.limit || 20 ] }}"
+          "queryReplacement": "={{ [ $json.params.created_after || null, $json.params.created_before || null, $json.params.id_after || null, $json.params.country || null, ($json.params.limit || 20) + 1 ] }}"
         }
       },
       "id": "query-customers",
@@ -117,7 +117,7 @@
         "mode": "manual",
         "includeOtherFields": true,
         "include": "selected",
-        "includeFields": "id, name, country, created_at, cursor",
+        "includeFields": "id, name, country, created_at",
         "assignments": {
           "assignments": []
         },
@@ -161,7 +161,6 @@
         "request": "={{ $('loopthink Runner').first().json }}",
         "respondWith": "page",
         "status": 200,
-        "cursorField": "cursor",
         "pageSize": "={{ $('loopthink Runner').first().json.params.limit || 20 }}"
       },
       "id": "answer-index",
