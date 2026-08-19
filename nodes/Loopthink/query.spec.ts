@@ -112,3 +112,24 @@ describe('sortDirection', () => {
 		expect(sortDirection('sideways', 'ASC')).to.equal('ASC');
 	});
 });
+
+describe('unused parameters', () => {
+	it('names a declared parameter that no row reads', () => {
+		// The tool offers `status`, the node has no match for it, so the filter
+		// silently would not apply. Nothing else in the chain would notice.
+		const q = prepareQuery({ status: 'confirmed', limit: 5 }, BASE);
+		expect(q.unused).to.deep.equal(['status']);
+	});
+
+	it('counts paging and every configured filter as accounted for', () => {
+		const q = prepareQuery(
+			{ limit: 5, cursor: 3, sort: 'oldest', created_after: 'x', status: 'y' },
+			{
+				...BASE,
+				ranges: [{ column: 'createdAt', parameter: 'created', type: 'date' }],
+				matches: [{ column: 'status' }],
+			},
+		);
+		expect(q.unused).to.deep.equal([]);
+	});
+});

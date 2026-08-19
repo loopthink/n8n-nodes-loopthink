@@ -52,9 +52,18 @@ export interface Comparison {
 export interface PreparedQuery {
 	limit: number;
 	order: 'ASC' | 'DESC';
+	/**
+	 * Parameters the tool declares that no row here consumes. A filter the model
+	 * was invited to send and that quietly does nothing returns more rows than
+	 * the caller asked for, and nothing else in the chain would say so.
+	 */
+	unused: string[];
 	/** Keyed by column: `q.id`, `q.status`, and `q.createdAt_min` / `_max` for a range. */
-	[key: string]: Comparison | number | string;
+	[key: string]: Comparison | number | string | string[];
 }
+
+/** Paging is the node's own business, never a filter. */
+const RESERVED = ['limit', 'cursor', 'sort'];
 
 const RANGE_SUFFIXES = { min: ['_after', '_from', '_min'], max: ['_before', '_to', '_max'] };
 
@@ -119,9 +128,13 @@ export function prepareQuery(
 				? NUMBER_MAX
 				: NUMBER_MIN;
 
+	// Names this call accounts for; whatever is left over is reported below.
+	const consumed = new Set(RESERVED);
+
 	const query: PreparedQuery = {
 		limit,
 		order,
+		unused: [],
 		[options.cursorColumn || 'id']: {
 			condition: order === 'DESC' ? 'lt' : 'gt',
 			value: (params.cursor as string | number) ?? openEnd,
@@ -130,6 +143,7 @@ export function prepareQuery(
 
 	for (const range of options.ranges ?? []) {
 		const prefix = range.parameter || range.column;
+		[...RANGE_SUFFIXES.min, ...RANGE_SUFFIXES.max].forEach((s) => consumed.add(prefix + s));
 		const min = firstDefined(params, RANGE_SUFFIXES.min.map((s) => prefix + s));
 		const max = firstDefined(params, RANGE_SUFFIXES.max.map((s) => prefix + s));
 		const wide = range.type === 'date' ? [DATE_MIN, DATE_MAX] : [NUMBER_MIN, NUMBER_MAX];
@@ -141,8 +155,10 @@ export function prepareQuery(
 
 	for (const match of options.matches ?? []) {
 		const name = match.parameter || match.column;
+		consumed.add(name);
 		query[match.column] = { condition: 'ilike', value: likeValue(params[name]) };
 	}
 
+	query.unused = Object.keys(params).filter((name) => !consumed.has(name));
 	return query;
 }
