@@ -37,16 +37,16 @@ export interface HttpPayload {
  */
 export interface ParamsPayload {
 	kind: 'params';
-	params: IDataObject;
 	/**
-	 * The same parameters, shaped for a workflow whose filter rows are fixed.
 	 * Every parameter the tool declares has a key here on every call: the value
-	 * that was sent, or one that cannot exclude anything. A Data Table node's
-	 * conditions are decided when the workflow is built and cannot be computed
-	 * per call, so an unused row has to hold something harmless, and the platform
-	 * is the only side that knows every parameter and its type.
+	 * the caller sent, the value the author pinned down, or one that cannot
+	 * exclude anything. Plus `limit`, `fetch` and `order`.
+	 *
+	 * All of it in one object, because a Data Table node's conditions are decided
+	 * when the workflow is built and every row needs a value on every call, and
+	 * looking in two places for that was one place too many.
 	 */
-	q?: IDataObject;
+	params: IDataObject;
 }
 
 /**
@@ -118,15 +118,12 @@ export function emitJob(ctx: ITriggerFunctions, job: QueuedRequest): void {
 			{
 				requestId: job.requestId,
 				tool: job.tool,
-				request: job.request as unknown as IDataObject,
-				// Flattened out of the payload so a branch reads `$json.params` and
-				// `$json.statement` whatever kind of tool it answers, instead of
-				// knowing where in `request` each one hides.
+				// One object for everything a branch reads. `request` used to travel
+				// alongside carrying the same values under another name, which only
+				// gave the schema panel two of everything.
 				params: isParamsRequest(job.request) || isStatementRequest(job.request)
 					? job.request.params
 					: {},
-				statement: isStatementRequest(job.request) ? job.request.statement : null,
-				q: isParamsRequest(job.request) ? (job.request.q ?? {}) : {},
 				masking: job.masking ?? [],
 				scope: job.scope ?? null,
 				leaseUntil: job.leaseUntil,
