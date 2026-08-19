@@ -40,26 +40,6 @@ export const prepareFields: INodeProperties[] = [
 		description: 'Used when the call sends no limit. A larger limit than this is capped to it.',
 	},
 	{
-		displayName: 'Cursor Column',
-		name: 'cursorColumn',
-		type: 'string',
-		default: 'id',
-		description:
-			'The column the table is sorted and paged by. It is also the key the comparison appears under, so a cursor on "id" is read as q.id.',
-	},
-	{
-		displayName: 'Cursor Column Type',
-		name: 'cursorType',
-		type: 'options',
-		default: 'number',
-		options: [
-			{ name: 'Number (For Example an ID)', value: 'number' },
-			{ name: 'Date', value: 'date' },
-		],
-		description:
-			'The type of the column the table is sorted and paged by. It decides where the first page starts.',
-	},
-	{
 		displayName: 'Order',
 		name: 'order',
 		type: 'options',
@@ -150,7 +130,7 @@ export const prepareFields: INodeProperties[] = [
 	},
 	{
 		displayName:
-			'Every condition row in the Data Table node is filled the same way: pick the column, then set <b>Condition</b> to <code>{{ $json.q.&lt;key&gt;.condition }}</code> and <b>Value</b> to <code>{{ $json.q.&lt;key&gt;.value }}</code>. The key is the column name — <code>q.id</code> for the cursor, <code>q.status</code> for a match — and a range needs two rows, <code>q.&lt;column&gt;_min</code> and <code>q.&lt;column&gt;_max</code>. Limit is <code>q.limit</code>, sort direction <code>q.order</code>. Every key holds a value on every call, so no row has to be removed for a parameter the model left out. <code>q.unused</code> lists parameters the tool declares that no row here reads: a filter the model was invited to send and that quietly does nothing.',
+			'Every condition row in the Data Table node is filled the same way: pick the column, then set <b>Condition</b> to <code>{{ $json.q.&lt;key&gt;.condition }}</code> and <b>Value</b> to <code>{{ $json.q.&lt;key&gt;.value }}</code>. The key is the column name: <code>q.id</code> for the cursor, which is always <code>id</code> because n8n gives every data table one, <code>q.status</code> for a match — and a range needs two rows, <code>q.&lt;column&gt;_min</code> and <code>q.&lt;column&gt;_max</code>. Limit is <code>q.limit</code>, sort direction <code>q.order</code>. Every key holds a value on every call, so no row has to be removed for a parameter the model left out. <code>q.unused</code> lists parameters the tool declares that no row here reads: a filter the model was invited to send and that quietly does nothing.',
 		name: 'prepareNotice',
 		type: 'notice',
 		default: '',
@@ -181,8 +161,6 @@ export async function executePrepare(this: IExecuteFunctions): Promise<INodeExec
 		const q = prepareQuery(params, {
 			defaultLimit: this.getNodeParameter('defaultLimit', i) as number,
 			order: this.getNodeParameter('order', i) as 'ASC' | 'DESC',
-			cursorColumn: this.getNodeParameter('cursorColumn', i) as string,
-			cursorType: this.getNodeParameter('cursorType', i) as 'date' | 'number',
 			ranges,
 			matches,
 		});

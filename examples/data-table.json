@@ -94,8 +94,6 @@
         "operation": "prepare",
         "params": "={{ $json.params }}",
         "defaultLimit": 20,
-        "cursorColumn": "id",
-        "cursorType": "number",
         "order": "DESC",
         "ranges": {
           "range": [

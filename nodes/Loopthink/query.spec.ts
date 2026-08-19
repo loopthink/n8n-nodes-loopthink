@@ -12,12 +12,7 @@ import {
 // A Data Table condition row exists whether or not the call filled it. These
 // cases are what keeps an unfilled row from excluding everything.
 
-const BASE = {
-	defaultLimit: 20,
-	order: 'DESC' as const,
-	cursorColumn: 'id',
-	cursorType: 'number' as const,
-};
+const BASE = { defaultLimit: 20, order: 'DESC' as const };
 
 describe('prepareQuery', () => {
 	it('gives every entry the same two fields, whatever it filters on', () => {
@@ -55,9 +50,12 @@ describe('prepareQuery', () => {
 			.to.have.property('value', 50);
 	});
 
-	it('keys the cursor by the column it pages on', () => {
-		const q = prepareQuery({}, { ...BASE, cursorColumn: 'booking_reference' });
-		expect(q.booking_reference).to.have.property('condition', 'lt');
+	it('pages on id whatever else the table holds', () => {
+		// Every n8n data table has one, and it is the only column keyset paging
+		// can trust. Nothing about the configuration can move it.
+		const q = prepareQuery({}, { ...BASE, ranges: [{ column: 'createdAt', type: 'date' }] });
+		expect(q.id).to.have.property('condition', 'lt');
+		expect(Object.keys(q)).to.not.include('createdAt');
 	});
 
 	it('starts the first page at the far end, in the direction of the sort', () => {

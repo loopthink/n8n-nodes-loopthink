@@ -59,6 +59,9 @@ Every entry has the same two fields, so every row is wired the same way:
 | range, upper | `createdAt` | `{{ $json.q.createdAt_max.condition }}` | `{{ $json.q.createdAt_max.value }}` |
 | optional match | `country` | `{{ $json.q.country.condition }}` | `{{ $json.q.country.value }}` |
 
+The cursor row is always `id`: n8n gives every data table one, and it is the only
+column keyset paging can trust, so the node does not offer the choice.
+
 Pick the column, then paste the same pair with the column's key. Which comparison
 a row needs is the node's decision: an equals where a bound belongs still runs,
 it just answers with nothing.

@@ -21,6 +21,23 @@
  * an equals where a bound belongs still runs, it just answers with nothing.
  */
 
+/**
+ * Paging is always on `id`, and it is not configurable.
+ *
+ * n8n creates every data table with `id integer PRIMARY KEY`, alongside
+ * `createdAt` and `updatedAt`; the three are guaranteed and `getColumns()` does
+ * not even list them. So the cursor column is never in question, and asking for
+ * it would only be a chance to name one that is not unique — which keyset paging
+ * does not survive. A strict comparison on a column that repeats skips every row
+ * sharing the boundary value, silently, at exactly one page boundary in a
+ * listing that otherwise looks correct.
+ *
+ * Ordering by `id` is insertion order, which is what "newest first" means for a
+ * table nobody backdates. Sorting by `createdAt` instead would gain nothing and
+ * cost the guarantee.
+ */
+export const CURSOR_COLUMN = 'id';
+
 /** Wider than any date a column can hold, so an absent bound excludes nothing. */
 export const DATE_MIN = '0001-01-01T00:00:00.000Z';
 export const DATE_MAX = '9999-12-31T23:59:59.999Z';
@@ -105,8 +122,6 @@ export function prepareQuery(
 	options: {
 		defaultLimit: number;
 		order: 'ASC' | 'DESC';
-		cursorColumn: string;
-		cursorType: RangeType;
 		ranges?: RangeSpec[];
 		matches?: MatchSpec[];
 	},
@@ -119,14 +134,7 @@ export function prepareQuery(
 	// Paging seeks strictly past the last row of the previous page. On the first
 	// page there is no cursor, so the comparison starts at the far end and the
 	// row keeps its place in the condition list.
-	const openEnd =
-		options.cursorType === 'date'
-			? order === 'DESC'
-				? DATE_MAX
-				: DATE_MIN
-			: order === 'DESC'
-				? NUMBER_MAX
-				: NUMBER_MIN;
+	const openEnd = order === 'DESC' ? NUMBER_MAX : NUMBER_MIN;
 
 	// Names this call accounts for; whatever is left over is reported below.
 	const consumed = new Set(RESERVED);
@@ -135,7 +143,7 @@ export function prepareQuery(
 		limit,
 		order,
 		unused: [],
-		[options.cursorColumn || 'id']: {
+		[CURSOR_COLUMN]: {
 			condition: order === 'DESC' ? 'lt' : 'gt',
 			value: (params.cursor as string | number) ?? openEnd,
 		},
