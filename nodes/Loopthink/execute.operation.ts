@@ -21,6 +21,8 @@ import { MissingSecretError, secretsFromCredential, substituteSecrets } from '..
 interface HttpRequest {
 	method?: string;
 	url?: string;
+	/** Relative, when the server did not tell loopthink where the API lives. */
+	path?: string;
 	query?: Record<string, string>;
 	headers?: Record<string, string>;
 	body?: unknown;
@@ -68,8 +70,11 @@ export async function executeRequest(this: IExecuteFunctions): Promise<INodeExec
 
 	// Optional: a server may point at an API that needs no secret at all.
 	let secrets: Record<string, string> = {};
+	let baseUrl = '';
 	try {
-		secrets = secretsFromCredential(await this.getCredentials('loopthinkTargetApi'));
+		const credential = await this.getCredentials('loopthinkTargetApi');
+		secrets = secretsFromCredential(credential);
+		baseUrl = String(credential.baseUrl || '').replace(/\/+$/, '');
 	} catch {
 		// Not configured. A request carrying no placeholder still works.
 	}
@@ -78,10 +83,24 @@ export async function executeRequest(this: IExecuteFunctions): Promise<INodeExec
 
 	for (let i = 0; i < this.getInputData().length; i += 1) {
 		const request = parseRequest(this.getNodeParameter('httpRequest', i));
+
+		// A path arrives instead of a URL when the server never told loopthink
+		// where the API lives, which is the normal case for an n8n server: the
+		// host is reachable from here and from nowhere else.
+		if (!request.url && request.path) {
+			if (!baseUrl) {
+				throw new NodeOperationError(this.getNode(), 'This call has a path but no base URL', {
+					description:
+						'loopthink sent the path only, so the base URL comes from here. Add it to the Secrets credential on this node.',
+				});
+			}
+			request.url = `${baseUrl}/${request.path.replace(/^\/+/, '')}`;
+		}
+
 		if (!request.url) {
-			throw new NodeOperationError(this.getNode(), 'No url in the Request parameter', {
+			throw new NodeOperationError(this.getNode(), 'No url or path in the Request parameter', {
 				description:
-					'This operation runs the HTTP call loopthink resolved. A workflow tool has no url, so route those to their own branch instead.',
+					'This operation runs the HTTP call loopthink resolved. A Data Table or custom tool has neither, so route those to their own branch instead.',
 			});
 		}
 

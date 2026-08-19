@@ -4,9 +4,13 @@ import type { ICredentialType, INodeProperties } from 'n8n-workflow';
  * Secrets for the internal systems this runner calls.
  *
  * These stay here, in your n8n, and are never sent to loopthink. In loopthink you
- * configure the *shape* of a request — which header, which URL — and write
- * `{{secret.NAME}}` where the value belongs. The runner fills those in on the way
+ * configure the *shape* of a request, which header and which path, and write
+ * `{{secret.NAME}}` where a value belongs. The runner fills those in on the way
  * out. loopthink sends the request to make, never the key to make it with.
+ *
+ * The base URL belongs here for the same reason. It names a host inside this
+ * network, so a server whose tools are answered from here does not hand it to
+ * loopthink at all: the request arrives as a path and is resolved against this.
  *
  * A name/value list rather than one JSON field: n8n gives it a real form, and a
  * missing comma cannot take down every call at once.
@@ -23,6 +27,15 @@ export class LoopthinkTargetApi implements ICredentialType {
 	documentationUrl = 'https://www.loopthink.ai/docs/n8n';
 
 	properties: INodeProperties[] = [
+		{
+			displayName: 'Base URL',
+			name: 'baseUrl',
+			type: 'string',
+			default: '',
+			placeholder: 'http://pms.internal:8080',
+			description:
+				'Where the tool paths point. An n8n server does not tell loopthink this, because the host is reachable from here and from nowhere else, so it arrives as a path and is joined with this. Needed only if the server has HTTP tools.',
+		},
 		{
 			displayName: 'Secrets',
 			name: 'secrets',
