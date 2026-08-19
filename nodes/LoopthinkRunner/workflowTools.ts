@@ -40,10 +40,28 @@ export interface ParamsPayload {
 	params: IDataObject;
 }
 
+/**
+ * A statement the platform bound and the workflow executes.
+ *
+ * It arrives as text on purpose. Which node runs it, against which credential
+ * and in which dialect, is the customer's decision and lives in their workflow;
+ * the platform only knows what to ask for. That is what makes a Postgres tool
+ * possible without the platform ever holding the database password.
+ *
+ * The values are already substituted, escaped by the platform with the same
+ * rules its own driver uses. `params` carries them separately as well, for a
+ * branch that wants to decide something without parsing the text back apart.
+ */
+export interface StatementPayload {
+	kind: 'statement';
+	statement: string;
+	params: IDataObject;
+}
+
 export interface QueuedRequest {
 	requestId: string;
 	tool: string;
-	request: HttpPayload | ParamsPayload;
+	request: HttpPayload | ParamsPayload | StatementPayload;
 	masking: MaskingRule[];
 	scope?: string;
 	credentialRef?: string;
@@ -54,6 +72,12 @@ export interface QueuedRequest {
 // and an absent one has always meant http.
 export function isParamsRequest(request: QueuedRequest['request']): request is ParamsPayload {
 	return (request as ParamsPayload)?.kind === 'params';
+}
+
+export function isStatementRequest(
+	request: QueuedRequest['request'],
+): request is StatementPayload {
+	return (request as StatementPayload)?.kind === 'statement';
 }
 
 /**
@@ -86,7 +110,13 @@ export function emitJob(ctx: ITriggerFunctions, job: QueuedRequest): void {
 				requestId: job.requestId,
 				tool: job.tool,
 				request: job.request as unknown as IDataObject,
-				params: isParamsRequest(job.request) ? job.request.params : {},
+				// Flattened out of the payload so a branch reads `$json.params` and
+				// `$json.statement` whatever kind of tool it answers, instead of
+				// knowing where in `request` each one hides.
+				params: isParamsRequest(job.request) || isStatementRequest(job.request)
+					? job.request.params
+					: {},
+				statement: isStatementRequest(job.request) ? job.request.statement : null,
 				masking: job.masking ?? [],
 				scope: job.scope ?? null,
 				leaseUntil: job.leaseUntil,
