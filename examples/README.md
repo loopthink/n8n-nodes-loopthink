@@ -21,7 +21,7 @@ can read them.
 | | [data-table.json](data-table.json) | [postgres.json](postgres.json) | [http-api.json](http-api.json) |
 |---|---|---|---|
 | Source | n8n Data Table | Postgres | any HTTP API |
-| Cursor key | row `id` | `(created_at, id)` | whatever the API pages by |
+| Cursor key | row `id` | `(created_at, id)`, selected as one `cursor` column | whatever the API pages by |
 | Filter, sort, page | Prepare Query → the Data Table node | `WHERE` / `ORDER BY` / `LIMIT` | the API's own parameters |
 | Trim the columns | Edit Fields | Edit Fields | Edit Fields |
 | `nextCursor`, `hasMore` | Send Result, **Page of Objects** | same | same |
@@ -135,7 +135,9 @@ ORDER BY created_at DESC, id DESC
 LIMIT $7
 ```
 
-The cursor is `"<iso>|<id>"`, opaque to the caller. Bounds are parameters and are
+The cursor is `"<iso>|<id>"`, opaque to the caller. Send Result reads one named
+field, so the pair is assembled in the SELECT as a `cursor` column and travels
+with each row: any row in a page can be the one you continue from. Bounds are parameters and are
 cast, so an absent one is a real `NULL` and the predicate drops out; passing `''`
 instead fails the cast. The two things SQL cannot take as parameters — the sort
 direction and the comparison operator — are interpolated from one expression that
