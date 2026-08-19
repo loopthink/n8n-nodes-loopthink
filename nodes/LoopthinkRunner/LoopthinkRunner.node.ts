@@ -87,10 +87,10 @@ export class LoopthinkRunner implements INodeType {
 				displayOptions: { show: { transport: ['polling'] } },
 				name: 'pollInterval',
 				type: 'number',
-				typeOptions: { minValue: 1, maxValue: 60 },
-				default: 2,
+				typeOptions: { minValue: 10, maxValue: 300 },
+				default: 10,
 				description:
-					'How often to check for work. This is the latency added to every tool call, so lower is snappier, and every poll is a request you pay for. 1 to 5 seconds is the sensible range.',
+					'How often to check for work. This is the latency added to every tool call, and every poll is a request you pay for. Ten seconds is the floor; use WebSocket if the wait matters, because a pushed call has none of it.',
 			},
 			{
 				// A notice renders its displayName — `default` is not shown at all,
@@ -106,7 +106,9 @@ export class LoopthinkRunner implements INodeType {
 
 	async trigger(this: ITriggerFunctions): Promise<ITriggerResponse> {
 		const credentials = await this.getCredentials('loopthinkRunnerApi');
-		const pollInterval = (this.getNodeParameter('pollInterval', 2) as number) * 1000;
+		// Clamped rather than trusted: an interval saved before the floor existed,
+		// or typed past the field, would otherwise poll as fast as it liked.
+		const pollInterval = Math.max(10, this.getNodeParameter('pollInterval', 10) as number) * 1000;
 		const transport = this.getNodeParameter('transport', 'polling') as 'polling' | 'websocket';
 
 		const queueUrl = String(credentials.queueUrl || '').replace(/\/+$/, '');

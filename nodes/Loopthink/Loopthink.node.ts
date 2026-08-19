@@ -6,22 +6,21 @@ import type {
 } from 'n8n-workflow';
 
 import { executeRequest, executeFields } from './execute.operation';
-import { executePrepare, prepareFields } from './prepare.operation';
 import { executeResult, resultFields } from './result.operation';
 
 /**
  * loopthink — what a workflow does with a claimed tool call.
  *
- * Three operations, and each earns it by doing something no standard node can.
+ * Two operations, and each earns it by doing something no standard node can.
  * Send Result masks with rules that arrived alongside the request. Execute
  * Request resolves `{{secret.NAME}}` before issuing the call, which a plain HTTP
- * Request node would forward verbatim into the target's access log. Prepare
- * Query fills the Data Table node's fixed condition rows, because a model's
- * parameters are each optional and that node wants them all declared up front.
+ * Request node would forward verbatim into the target's access log.
  *
- * An earlier one built index pages and has been removed: it earned its place
- * from a limitation that was not there. Paging by cursor rather than offset lets
- * the source do the work.
+ * Two others were here and are gone. One built index pages, from a limitation
+ * that was not there. The other filled the Data Table node's fixed condition
+ * rows, which the platform now does before the call is queued: it already knows
+ * every parameter and its type, so asking the workflow to describe them again
+ * was work for nothing. Both arrive ready to use on `$json.q`.
  *
  * The runner stays separate. It is a trigger: no inputs, a lifecycle of its own,
  * and n8n cannot combine a trigger with a regular node.
@@ -75,13 +74,6 @@ export class Loopthink implements INodeType {
 						description: 'Issue the HTTP call loopthink resolved, filling in your secrets',
 						action: 'Execute the resolved HTTP request',
 					},
-					{
-						name: 'Prepare Query',
-						value: 'prepare',
-						description:
-							"Turn the model's optional parameters into values a Data Table node can filter on",
-						action: 'Prepare a data table query',
-					},
 				],
 			},
 			...resultFields.map((field) => ({
@@ -92,17 +84,12 @@ export class Loopthink implements INodeType {
 				...field,
 				displayOptions: { ...field.displayOptions, show: { ...field.displayOptions?.show, operation: ['execute'] } },
 			})),
-			...prepareFields.map((field) => ({
-				...field,
-				displayOptions: { ...field.displayOptions, show: { ...field.displayOptions?.show, operation: ['prepare'] } },
-			})),
 		],
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
-		const operation = this.getNodeParameter('operation', 0) as 'result' | 'execute' | 'prepare';
+		const operation = this.getNodeParameter('operation', 0) as 'result' | 'execute';
 		if (operation === 'execute') return executeRequest.call(this);
-		if (operation === 'prepare') return executePrepare.call(this);
 		return executeResult.call(this);
 	}
 }

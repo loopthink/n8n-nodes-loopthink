@@ -91,43 +91,6 @@
     },
     {
       "parameters": {
-        "operation": "prepare",
-        "params": "={{ $json.params }}",
-        "defaultLimit": 20,
-        "order": "DESC",
-        "ranges": {
-          "range": [
-            {
-              "column": "id",
-              "type": "number"
-            },
-            {
-              "column": "createdAt",
-              "type": "date",
-              "parameter": "created"
-            }
-          ]
-        },
-        "matches": {
-          "match": [
-            {
-              "column": "country",
-              "parameter": "country"
-            }
-          ]
-        }
-      },
-      "type": "@loopthink/n8n-nodes-loopthink.loopthink",
-      "typeVersion": 1,
-      "position": [
-        420,
-        100
-      ],
-      "id": "prepare-query",
-      "name": "Prepare query"
-    },
-    {
-      "parameters": {
         "operation": "get",
         "dataTableId": {
           "__rl": true,
@@ -141,22 +104,17 @@
             {
               "keyName": "id",
               "condition": "gt",
-              "keyValue": "={{ $json.q.id_min }}"
-            },
-            {
-              "keyName": "id",
-              "condition": "lt",
-              "keyValue": "={{ $json.q.id_max }}"
+              "keyValue": "={{ $json.q.id_after }}"
             },
             {
               "keyName": "createdAt",
               "condition": "gte",
-              "keyValue": "={{ $json.q.createdAt_min }}"
+              "keyValue": "={{ $json.q.created_after }}"
             },
             {
               "keyName": "createdAt",
               "condition": "lte",
-              "keyValue": "={{ $json.q.createdAt_max }}"
+              "keyValue": "={{ $json.q.created_before }}"
             },
             {
               "keyName": "country",
@@ -177,7 +135,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        660,
+        420,
         100
       ]
     },
@@ -195,7 +153,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
       "position": [
-        880,
+        660,
         100
       ],
       "id": "keep-index-fields",
@@ -207,14 +165,14 @@
         "request": "={{ $('loopthink Runner').first().json }}",
         "respondWith": "page",
         "status": 200,
-        "pageSize": "={{ $('Prepare query').first().json.q.limit }}"
+        "pageSize": "={{ $('loopthink Runner').first().json.q.limit }}"
       },
       "id": "answer-index",
       "name": "Answer index",
       "type": "@loopthink/n8n-nodes-loopthink.loopthink",
       "typeVersion": 1,
       "position": [
-        1100,
+        900,
         100
       ],
       "credentials": {
@@ -317,7 +275,7 @@
       "main": [
         [
           {
-            "node": "Prepare query",
+            "node": "Read customers",
             "type": "main",
             "index": 0
           }
@@ -332,17 +290,6 @@
         [
           {
             "node": "Answer unhandled",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare query": {
-      "main": [
-        [
-          {
-            "node": "Read customers",
             "type": "main",
             "index": 0
           }

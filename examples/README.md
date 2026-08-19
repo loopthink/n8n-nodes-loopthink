@@ -22,7 +22,7 @@ can read them.
 |---|---|---|---|
 | Source | n8n Data Table | Postgres | any HTTP API |
 | Read on from | `id_after` | `id_after` | `id_after` |
-| Filter, sort, limit | Prepare Query → the Data Table node | `WHERE` / `ORDER BY` / `LIMIT` | the API's own parameters |
+| Filter, sort, limit | the Data Table node, from `$json.q` | `WHERE` / `ORDER BY` / `LIMIT` | the API's own parameters |
 | Trim the columns | Edit Fields | Edit Fields | Edit Fields |
 | `truncated` | Send Result, **Capped List** | same | same |
 
@@ -37,7 +37,7 @@ Everything after the source is a standard n8n node: Edit Fields keeps the column
 the index tool is meant to expose. loopthink's own node bundles the rows, hands
 out the cursor, masks the answer and sends it.
 
-### Why the Data Table workflow has a Prepare Query in front of it
+### Why the Data Table workflow reads `$json.q`
 
 The other two sources take the whole query as one expression, a SQL statement or a
 URL. The Data Table node does not: its conditions are rows in the editor, fixed
@@ -46,25 +46,26 @@ expression (n8n walks a string handed to a multi-value collection character by
 character and quietly produces one empty condition per character).
 
 So the rows have to be there whether or not the call filled them, and each one
-needs a value that cannot exclude anything when it was not filled. **Prepare
-Query** produces those values: a range gets a bound so far outside the data that
-the comparison is free, and an optional match gets a wildcard.
+needs a value that cannot exclude anything when it was not filled. The platform
+sends those values as `q`: a bound the call omitted opens to the end its suffix
+implies, and an optional match becomes a wildcard.
 
-One key, one plain value. The comparison is chosen once from the dropdown, so it
-is not in the data:
+It arrives keyed by the tool's parameter name, which is the name the model sees
+and the one you typed when you created the tool. The comparison is chosen once
+from the dropdown, so it is not in the data:
 
-| Row | Column | Comparison | Value |
+| Tool parameter | Column | Comparison | Value |
 |---|---|---|---|
-| range, lower | `createdAt` | Or Later | `{{ $json.q.createdAt_min }}` |
-| range, upper | `createdAt` | Or Earlier | `{{ $json.q.createdAt_max }}` |
-| optional match | `country` | Contains | `{{ $json.q.country }}` |
-| read on | `id` | Greater Than | `{{ $json.q.id_min }}` |
+| `created_after` | `createdAt` | Or Later | `{{ $json.q.created_after }}` |
+| `created_before` | `createdAt` | Or Earlier | `{{ $json.q.created_before }}` |
+| `country` | `country` | Contains | `{{ $json.q.country }}` |
+| `id_after` | `id` | Greater Than | `{{ $json.q.id_after }}` |
 
 Limit is `{{ $json.q.fetch }}`, one more than the answer carries, and Order is
 `{{ $json.q.order }}`.
 
-Reading on is not a mechanism of its own. It is a range on `id` configured like
-any other, which is why nothing here knows the word cursor.
+Reading on is not a mechanism of its own. `id_after` is an ordinary parameter
+compared with Greater Than, which is why nothing here knows the word cursor.
 
 ## Import
 

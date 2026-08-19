@@ -103,11 +103,11 @@ export const resultFields: INodeProperties[] = [
 			displayName: 'Limit',
 			name: 'pageSize',
 			type: 'number',
-			// The useful default is the limit the query was built with, which is an
+			// The useful default is the limit the call was made with, which is an
 			// expression; a literal would quietly disagree with it. The comment has
 			// to sit directly above the property or --fix replaces the default.
 			// eslint-disable-next-line n8n-nodes-base/node-param-default-wrong-for-number
-			default: "={{ $('Prepare query').first().json.q.limit }}",
+			default: "={{ $('loopthink Runner').first().json.q.limit }}",
 			displayOptions: { show: { respondWith: ['page'] } },
 			description:
 				'How many rows to answer with. Read one more than this in the branch: if the extra row arrives, the answer is marked truncated.',

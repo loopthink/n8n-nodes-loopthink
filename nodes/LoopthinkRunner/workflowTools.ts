@@ -38,6 +38,15 @@ export interface HttpPayload {
 export interface ParamsPayload {
 	kind: 'params';
 	params: IDataObject;
+	/**
+	 * The same parameters, shaped for a workflow whose filter rows are fixed.
+	 * Every parameter the tool declares has a key here on every call: the value
+	 * that was sent, or one that cannot exclude anything. A Data Table node's
+	 * conditions are decided when the workflow is built and cannot be computed
+	 * per call, so an unused row has to hold something harmless, and the platform
+	 * is the only side that knows every parameter and its type.
+	 */
+	q?: IDataObject;
 }
 
 /**
@@ -117,6 +126,7 @@ export function emitJob(ctx: ITriggerFunctions, job: QueuedRequest): void {
 					? job.request.params
 					: {},
 				statement: isStatementRequest(job.request) ? job.request.statement : null,
+				q: isParamsRequest(job.request) ? (job.request.q ?? {}) : {},
 				masking: job.masking ?? [],
 				scope: job.scope ?? null,
 				leaseUntil: job.leaseUntil,

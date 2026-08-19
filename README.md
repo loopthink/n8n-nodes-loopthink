@@ -143,33 +143,32 @@ the **Secrets** credential on the way out. That substitution is the reason this
 is not a plain HTTP Request node: handed the placeholder, a standard node sends
 it verbatim and it lands in the target's access log.
 
-**Prepare Query** is only for the Data Table node, and only because that node
-cannot take its conditions from an expression. A SQL statement or a URL is one
-string, so a call that left a filter out simply produces a shorter query. A Data
-Table node's conditions are rows in the editor, fixed when the workflow is built,
-and the list as a whole cannot be computed: handed a string, n8n walks it
+**`$json.q`** is what fills a Data Table node's condition rows, and it arrives
+ready to use. That node cannot take its conditions from an expression: they are
+rows in the editor, fixed when the workflow is built, and the list as a whole
+cannot be computed, because n8n walks a string handed to a multi-value collection
 character by character and quietly produces one empty condition per character.
 
-So every row has to hold a value on every call. Prepare Query produces them: a
-bound so far outside the data that the comparison is free, and a wildcard for an
-optional match. One key, one plain value:
+So every row has to hold a value on every call, including the ones the model left
+empty. The platform sends them, keyed by the tool's parameter name: a bound so
+far outside the data that the comparison is free, and a wildcard for an optional
+match. One key, one plain value:
 
-| | Column | Comparison | Value |
+| Tool parameter | Column | Comparison | Value |
 |---|---|---|---|
-| range, lower | `createdAt` | Or Later | `{{ $json.q.createdAt_min }}` |
-| range, upper | `createdAt` | Or Earlier | `{{ $json.q.createdAt_max }}` |
-| match | `status` | Contains | `{{ $json.q.status }}` |
-| read on | `id` | Greater Than | `{{ $json.q.id_min }}` |
+| `created_after` | `createdAt` | Or Later | `{{ $json.q.created_after }}` |
+| `created_before` | `createdAt` | Or Earlier | `{{ $json.q.created_before }}` |
+| `status` | `status` | Contains | `{{ $json.q.status }}` |
+| `id_after` | `id` | Greater Than | `{{ $json.q.id_after }}` |
 
 The comparison is chosen once from the dropdown and never changes, so it is not
 in the data. Set **Limit** to `{{ $json.q.fetch }}`, which is one more than the
 limit, and **Order** to `{{ $json.q.order }}`.
 
-A range on `id` is what lets a model read on, and it is configured exactly like
-any other range. Compare it with **Greater Than** rather than Or Later, so that
-`id_after` means what it says and the boundary row is not returned twice.
+`id_after` is what lets a model read on, and it is an ordinary parameter like any
+other. Compare it with **Greater Than** rather than Or Later, so that it means
+what it says and the boundary row is not returned twice.
 
-![Prepare Query](https://raw.githubusercontent.com/loopthink/n8n-nodes-loopthink/main/docs/prepare-query.png)
 ![The Data Table node reading from it](https://raw.githubusercontent.com/loopthink/n8n-nodes-loopthink/main/docs/read-bookings.png)
 
 Paging is by **cursor**, not offset, so the source does the work: `id < c` with a
