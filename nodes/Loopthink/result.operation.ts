@@ -62,6 +62,16 @@ function pagePayload(
 const MAX_RESULT_BYTES = 300 * 1024;
 
 /**
+ * The status that says "ran fine, does not fit".
+ *
+ * Sent alongside the sentence rather than as a bare error, because the platform
+ * has to tell this apart from a tool that actually broke: one is something the
+ * model resolves by asking for a narrower slice, the other is not. Without the
+ * status the backend has only the wording to go on.
+ */
+const RESULT_TOO_LARGE_STATUS = 413;
+
+/**
  * Written for the model, not for whoever is reading this execution.
  *
  * The size is a fact about our queue; the model that asked has no idea it caused
@@ -217,7 +227,7 @@ export async function executeResult(this: IExecuteFunctions): Promise<INodeExecu
 		const size = Buffer.byteLength(JSON.stringify(data ?? null), 'utf8');
 		body =
 			size > MAX_RESULT_BYTES
-				? { error: tooLargeMessage(size, countRows(data)) }
+				? { status: RESULT_TOO_LARGE_STATUS, error: tooLargeMessage(size, countRows(data)) }
 				: { status: this.getNodeParameter('status', 0) as number, data };
 	}
 
