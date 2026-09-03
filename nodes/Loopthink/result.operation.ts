@@ -125,7 +125,9 @@ export const resultFields: INodeProperties[] = [
 			displayName: 'Respond With',
 			name: 'respondWith',
 			type: 'options',
-			default: 'object',
+			// Most tools answer with rows. Defaulting to the single-object shape
+			// meant a listing branch silently returned only its first item.
+			default: 'list',
 			options: [
 				{
 					name: 'One Object',
