@@ -5,12 +5,11 @@ import WebSocket from 'ws';
 import type { QueuedRequest } from './workflowTools';
 
 /**
- * The WebSocket transport: the same queue, told instead of asked.
+ * How work reaches the runner: one outbound WebSocket, told instead of asked.
  *
  * Only how work arrives lives here. What happens to a claimed call — the
  * secrets, the masking, the result endpoint, which output a workflow tool leaves
- * on — is passed in, because it is identical either way. As two separate nodes
- * every change had to be made twice and stayed right only by luck.
+ * on — is passed in by the node, which owns all of it.
  */
 
 // Two deadlines, and the shorter one wins. API Gateway drops an idle connection
@@ -53,7 +52,7 @@ export async function startSocket(
 
 	if (!ping?.wsUrl) {
 		throw new NodeOperationError(ctx.getNode(), 'This loopthink deployment has no WebSocket transport', {
-			description: 'Switch Transport to Polling, or ask for the transport to be enabled.',
+			description: 'Ask for the transport to be enabled on this deployment; the runner needs it to receive work.',
 		});
 	}
 
@@ -122,7 +121,7 @@ export async function startSocket(
 				ctx.logger.error(
 					'loopthink Runner: could not establish a WebSocket connection after three attempts. ' +
 						'This network most likely does not allow WebSocket upgrades (a proxy, or TLS inspection breaking them). ' +
-						'Switch Transport to Polling. It needs nothing but plain HTTPS.',
+						'Allow an outbound WebSocket upgrade to the loopthink queue host, or run the Docker runner instead.',
 				);
 			}
 			reconnectTimer = setTimeout(connect, backoff);

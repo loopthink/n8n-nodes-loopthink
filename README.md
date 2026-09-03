@@ -10,7 +10,7 @@ is not an option.
 
 ```
 Claude ──► loopthink ──► queue ──┐
-                                 │  n8n polls (outbound only)
+                                 │  pushed to n8n (outbound only)
                                  ▼
                           [loopthink Runner] ──► your internal API
                                  │
@@ -44,21 +44,16 @@ over Postgres, and over an HTTP API.
 **loopthink** is what the workflow does with the rest: *Build Index Page* and
 *Send Result*.
 
-### One transport setting, not two nodes
+### How work arrives
 
-| | **Polling** | **WebSocket** |
-|---|---|---|
-| How work arrives | asked for every few seconds | pushed the moment it is queued |
-| Latency added | half the poll interval | none |
-| Needs | plain HTTPS | a network that allows WebSocket upgrades |
-| Cost to loopthink | ~$6 per runner/month | ~$0.04 |
+The Runner holds **one outbound WebSocket** and is pushed each call the moment it
+is queued. There is nothing to configure: no poll interval, so no latency added
+to a tool call, and no request paid for while there is nothing to do.
 
-Both serve the same queue, so switching loses nothing: work a socket does not
-take stays queued.
-
-**Start with WebSocket.** If it cannot connect, the log says so after three
-attempts, that is the answer, and Polling is the fallback. Corporate proxies and
-TLS inspection are the usual reason an upgrade fails.
+What it needs is a network that allows an outbound WebSocket upgrade to the
+loopthink queue host. If one cannot be established, the log says so after three
+attempts, which is the symptom of a proxy or of TLS inspection breaking the
+upgrade. Where that cannot be changed, the Docker runner is the way in.
 
 ## Install
 
@@ -74,11 +69,12 @@ Self-hosted n8n only, as community nodes generally are.
 3. In n8n, create a **loopthink Runner API** credential (the node's
    **Authentication** slot) and paste the four values. Saving it runs a
    connection check against the queue, so a wrong value shows up right away.
-4. Add a runner node to a workflow and **activate** it (see the table above for which).
+4. Add the **loopthink Runner** node to a workflow and **activate** it.
 
-That last step matters: while you are only running *Test workflow* in the editor,
-the node listens for a short window and then stops. It polls continuously only
-once the workflow is active.
+That last step matters: the connection to loopthink lives for as long as the
+workflow is active, and *Test workflow* in the editor only holds it while the tab
+waits. A runner that reads as offline in loopthink is almost always a workflow
+nobody activated.
 
 ### Credentials for your own systems
 
@@ -93,18 +89,21 @@ were never anywhere near us to begin with.
 
 ## How it behaves
 
-- **Polling, not scheduling.** The loop lives inside the node, so no execution is
-  created while there is nothing to do. A Schedule trigger at one second would
-  produce ~2.6 million executions a month, over 99% of them finding nothing.
-- **Poll interval is latency.** It is the delay added to every tool call. 1–5
-  seconds is the sensible range; every poll is also a request loopthink pays for.
-- **Bursts are handled without waiting.** After a call is answered the node checks
-  again immediately rather than sleeping out the interval.
+- **A connection, not a schedule.** The socket lives inside the node, so no
+  execution is created while there is nothing to do. A Schedule trigger at one
+  second would produce ~2.6 million executions a month, over 99% of them finding
+  nothing.
+- **No latency of its own.** A call is pushed as it is queued, so nothing is
+  added to it by waiting for the next look.
+- **Bursts are handled without waiting.** Each pushed call is emitted as it
+  arrives, however many arrive together.
 - **Executions are your audit trail.** One per tool call, with the tool name, the
   URL, the status and how many masking rules applied. Turn it off with
   *Emit Results* if you would rather keep the list clean.
-- **Transient failures do not stop it.** A failed poll is logged and retried;
-  stopping would leave the runner silently dead until someone noticed.
+- **Transient failures do not stop it.** A dropped socket is logged and
+  reconnected with a backoff; API Gateway closes every connection eventually
+  anyway, so that is ordinary operation rather than a fault. Stopping would leave
+  the runner silently dead until someone noticed.
 
 ## The loopthink node
 
@@ -189,9 +188,7 @@ for HTTP tools **without** a scope, or it will silently do nothing.
 ## Scope
 
 HTTP tools are executed by the node; anything else is a workflow tool your own
-branch answers. Both transports do both, so switching between them changes
-nothing but latency and cost. HubSpot and Salesforce importers are not executed
-here.
+branch answers. HubSpot and Salesforce importers are not executed here.
 
 ## Develop
 

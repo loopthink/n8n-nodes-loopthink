@@ -80,8 +80,8 @@ the prefix if you are running the development rig.
    pick the credential and table from the dropdowns in the editor.
 2. Create the tools in loopthink with **Implementation: Workflow** and the
    parameters below. The tool name is the contract: it has to match the Switch.
-3. Activate the workflow. It polls only while active; *Test workflow* listens
-   for a short window and stops.
+3. Activate the workflow. The runner holds its connection to loopthink only
+   while the workflow is active; *Test workflow* holds it while the tab waits.
 
 One runner per MCP server. Two active workflows sharing one runner credential
 would compete for the same queue, and whichever claimed a request first would

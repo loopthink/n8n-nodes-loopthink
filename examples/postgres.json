@@ -2,10 +2,7 @@
   "name": "loopthink Runner \u2014 Postgres",
   "nodes": [
     {
-      "parameters": {
-        "transport": "polling",
-        "pollInterval": 2
-      },
+      "parameters": {},
       "id": "loopthink-runner",
       "name": "loopthink Runner",
       "type": "@loopthink/n8n-nodes-loopthink.loopthinkRunner",
