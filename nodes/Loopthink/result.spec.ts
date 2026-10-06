@@ -54,7 +54,9 @@ function bulkyRows(count: number): any[] {
 	return Array.from({ length: count }, (_, i) => ({
 		id: i,
 		guest: `Guest number ${i} with a name long enough to matter`,
-		note: 'x'.repeat(400),
+		// Heavy enough that a few hundred rows pass 5 MB, so the over-budget cases
+		// below stay over it.
+		note: 'x'.repeat(7000),
 	}));
 }
 
@@ -77,7 +79,7 @@ describe('A result over the size budget', () => {
 
 		const { error } = sent[0].body;
 		expect(error).to.contain('1,625 rows');
-		expect(error).to.contain('300 KB');
+		expect(error).to.contain('5 MB');
 		expect(error).to.contain('narrow the filters');
 		expect(error).to.contain('smaller limit');
 		// A status code is a fact about our queue. The model did not cause it and

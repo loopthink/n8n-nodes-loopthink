@@ -163,10 +163,14 @@ See [examples/](examples) for three sources worked through.
 
 ### When an answer is too large
 
-One answer carries 300 KB. Past that **Send Result** does not send the rows at
+One answer carries 5 MB. Past that **Send Result** does not send the rows at
 all: it answers with a sentence naming the size and the row count and saying to
 narrow the filters or pass a smaller limit, which a model acts on by splitting
 its question and asking again.
+
+Five megabytes is what fits through the way back to the client, not what a model
+reads comfortably: it is around a million tokens. A tool that answers with the
+columns a question needs, rather than every column it has, stays far below it.
 
 Measured before the POST on purpose. Sent anyway, an oversized body is rejected
 by whichever layer notices first, the call stays unanswered, and the caller waits

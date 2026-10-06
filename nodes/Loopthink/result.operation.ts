@@ -58,8 +58,12 @@ function pagePayload(
  * be known *here* to be useful. Measured after the POST, an oversized body is
  * already a rejected request, the call stays unanswered, and the caller waits
  * out its timeout to be told nothing.
+ *
+ * 5 MB since mcp stores the answer in its result bucket rather than in the queue
+ * item (which capped it at 300 KB). What bounds it now is the way back to the
+ * client, a synchronous Lambda response of 6 MB, less the JSON around the data.
  */
-const MAX_RESULT_BYTES = 300 * 1024;
+const MAX_RESULT_BYTES = 5 * 1024 * 1024;
 
 /**
  * The status that says "ran fine, does not fit".
@@ -79,11 +83,18 @@ const RESULT_TOO_LARGE_STATUS = 413;
  * for less. A model told that splits the range and asks again, which is the
  * behaviour we want and the one a status code never produces.
  */
+function formatBytes(n: number): string {
+	if (n >= 1024 * 1024) {
+		const mb = n / (1024 * 1024);
+		return `${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB`;
+	}
+	return `${Math.round(n / 1024)} KB`;
+}
+
 function tooLargeMessage(bytes: number, rows?: number): string {
-	const kb = (n: number) => `${Math.round(n / 1024)} KB`;
 	const counted = rows === undefined ? '' : `${rows.toLocaleString('en-US')} rows, `;
 	return (
-		`The result was too large to return: ${counted}${kb(bytes)}, and one answer can carry ${kb(MAX_RESULT_BYTES)}. ` +
+		`The result was too large to return: ${counted}${formatBytes(bytes)}, and one answer can carry ${formatBytes(MAX_RESULT_BYTES)}. ` +
 		'Nothing was returned. Ask for a smaller slice and combine the answers: narrow the filters, for instance a ' +
 		'shorter date range or a more specific match, or pass a smaller limit if this tool takes one.'
 	);
