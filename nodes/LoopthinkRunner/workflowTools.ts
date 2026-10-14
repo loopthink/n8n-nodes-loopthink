@@ -67,10 +67,26 @@ export interface StatementPayload {
 	params: IDataObject;
 }
 
+/**
+ * One JSON-RPC request to an MCP server only this network can reach.
+ *
+ * The platform keeps the approval list, the published schemas and the masking
+ * rules; what it cannot do is open the session, so it sends the method and its
+ * params and the loopthink node forwards them as they are. `tools/list` is the
+ * listing the admin runs when approving tools, `tools/call` is every call. The
+ * server URL and its credential live on that node, in n8n, like every other
+ * credential this runner is trusted with.
+ */
+export interface McpPayload {
+	kind: 'mcp';
+	method: 'tools/list' | 'tools/call';
+	params: IDataObject;
+}
+
 export interface QueuedRequest {
 	requestId: string;
 	tool: string;
-	request: HttpPayload | ParamsPayload | StatementPayload;
+	request: HttpPayload | ParamsPayload | StatementPayload | McpPayload;
 	masking: MaskingRule[];
 	scope?: string;
 	credentialRef?: string;
@@ -87,6 +103,10 @@ export function isStatementRequest(
 	request: QueuedRequest['request'],
 ): request is StatementPayload {
 	return (request as StatementPayload)?.kind === 'statement';
+}
+
+export function isMcpRequest(request: QueuedRequest['request']): request is McpPayload {
+	return (request as McpPayload)?.kind === 'mcp';
 }
 
 /**
@@ -121,9 +141,14 @@ export function emitJob(ctx: ITriggerFunctions, job: QueuedRequest): void {
 				// One object for everything a branch reads. `request` used to travel
 				// alongside carrying the same values under another name, which only
 				// gave the schema panel two of everything.
-				params: isParamsRequest(job.request) || isStatementRequest(job.request)
-					? job.request.params
-					: {},
+				params:
+					isParamsRequest(job.request) || isStatementRequest(job.request) || isMcpRequest(job.request)
+						? job.request.params
+						: {},
+				// Only an MCP request names a method; the loopthink node forwards it
+				// with the params above. Absent on every other kind, so a Switch that
+				// never heard of it sees nothing new.
+				...(isMcpRequest(job.request) ? { method: job.request.method } : {}),
 				masking: job.masking ?? [],
 				scope: job.scope ?? null,
 				leaseUntil: job.leaseUntil,

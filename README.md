@@ -17,12 +17,14 @@ Claude ──► loopthink ──► queue ──┐
                           masked result ──► loopthink ──► Claude
 ```
 
-## Two kinds of tool, one shape
+## Three kinds of tool, one shape
 
 **HTTP tools** are calls loopthink resolved in full: method, URL, headers, body.
 **Workflow tools** are calls it cannot resolve, because the source has no address
 (an n8n Data Table, a Sheet, a database, any node-only integration), so it sends
-the validated arguments instead.
+the validated arguments instead. **MCP calls** are requests for an MCP server
+that only your network can reach: loopthink sends the JSON-RPC method and params,
+and the node forwards them, see [Proxying an MCP server](#proxying-an-mcp-server).
 
 Every call leaves the Runner on the same output. A Switch on `{{$json.tool}}`
 sends each tool to the branch that answers it, and every branch ends in
@@ -104,6 +106,41 @@ were never anywhere near us to begin with.
   reconnected with a backoff; API Gateway closes every connection eventually
   anyway, so that is ordinary operation rather than a fault. Stopping would leave
   the runner silently dead until someone noticed.
+
+## Proxying an MCP server
+
+A loopthink server of type **MCP server** can run behind this runner instead of
+being reached by the platform. That is for an MCP server that lives inside your
+network: loopthink still decides which of its tools exist, with the approval
+list and the masking rules per tool, but it cannot open the session, so it
+sends each call as the JSON-RPC request to forward and the node makes it.
+
+The workflow is two nodes and has no Switch, because the platform already
+decided which tools exist and there is nothing to route:
+
+```
+[loopthink Runner] → [loopthink → Call MCP Server]
+```
+
+**Call MCP Server** takes the server's URL and, optionally, a Header Auth or
+Bearer Auth credential from n8n's own store. Neither ever reaches loopthink:
+the connection there has no URL field in this mode. The node opens the session
+(`initialize`, the `initialized` notification, then the request), forwards
+`tools/call` as it arrived, unwraps the result the way the platform's own proxy
+would (`structuredContent` when declared, otherwise the text, parsed as JSON
+when it is JSON), masks it with the rules that travelled with the call and
+answers. A failing tool answers with the tool's own words, and the execution is
+marked failed so the failure is visible here too.
+
+`tools/list` arrives the same way when an admin presses **Test** or **Discover**
+in loopthink: the node lists every page of the server's tools and answers with
+them, unmasked, so they can be approved one by one. New tools on the server
+show up at the next listing; the workflow does not change.
+
+The runner has to be online for the listing and for every call. The server's
+answer to one call carries the same 5 MB as any other answer.
+
+See [examples/mcp-server.json](examples/mcp-server.json).
 
 ## The loopthink node
 
@@ -191,8 +228,9 @@ for HTTP tools **without** a scope, or it will silently do nothing.
 
 ## Scope
 
-HTTP tools are executed by the node; anything else is a workflow tool your own
-branch answers. HubSpot and Salesforce importers are not executed here.
+HTTP tools are executed by the node; MCP calls are forwarded by **Call MCP
+Server**; anything else is a workflow tool your own branch answers. HubSpot and
+Salesforce importers are not executed here.
 
 ## Develop
 

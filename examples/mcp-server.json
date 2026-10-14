@@ -1,0 +1,63 @@
+{
+  "name": "loopthink Runner \u2014 MCP server in this network",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "loopthink-runner",
+      "name": "loopthink Runner",
+      "type": "@loopthink/n8n-nodes-loopthink.loopthinkRunner",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        0
+      ],
+      "credentials": {
+        "loopthinkRunnerApi": {
+          "id": "<LOOPTHINK_CREDENTIAL_ID>",
+          "name": "Loopthink Runner"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "mcp",
+        "request": "={{ $('loopthink Runner').first().json }}",
+        "serverUrl": "<MCP_SERVER_URL>",
+        "authentication": "none"
+      },
+      "id": "call-mcp-server",
+      "name": "Call MCP Server",
+      "type": "@loopthink/n8n-nodes-loopthink.loopthink",
+      "typeVersion": 1,
+      "position": [
+        -120,
+        0
+      ],
+      "credentials": {
+        "loopthinkRunnerApi": {
+          "id": "<LOOPTHINK_CREDENTIAL_ID>",
+          "name": "Loopthink Runner"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "loopthink Runner": {
+      "main": [
+        [
+          {
+            "node": "Call MCP Server",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true,
+    "executionOrder": "v1"
+  }
+}

@@ -60,7 +60,7 @@ export class LoopthinkRunner implements INodeType {
 				// A notice renders its displayName — `default` is not shown at all,
 				// which is easy to get backwards and leaves an empty box behind.
 				displayName:
-					'Every claimed call leaves here. Route it with a Switch on <code>{{$json.tool}}</code>: a workflow tool goes to the branch that answers it, an HTTP tool to a branch with <b>loopthink → Execute Request</b>. Every branch ends in <b>loopthink → Send Result</b>. Give the Switch a fallback, or a tool nobody answers leaves the caller waiting out its timeout.',
+					'Every claimed call leaves here. Route it with a Switch on <code>{{$json.tool}}</code>: a workflow tool goes to the branch that answers it, an HTTP tool to a branch with <b>loopthink → Execute Request</b>. Every branch ends in <b>loopthink → Send Result</b>. Give the Switch a fallback, or a tool nobody answers leaves the caller waiting out its timeout.<br><br>For a server that proxies an MCP server in this network, no Switch: connect <b>loopthink → Call MCP Server</b> directly. It forwards every call and answers it.',
 				name: 'workflowNotice',
 				type: 'notice',
 				default: '',

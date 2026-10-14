@@ -1,7 +1,11 @@
 # Example workflows
 
 Three workflows answering the same pair of tools, an `index` and a `show`, over
-three different sources. All three were run end to end against a loopthink stage
+three different sources, and a fourth, [mcp-server.json](mcp-server.json), that
+answers nothing itself: it forwards every call to an MCP server inside the
+network, in two nodes and without a Switch, for a loopthink server of type
+**MCP server** running behind the runner. Put the server's URL (and a Header or
+Bearer Auth credential, if it needs one) on the **Call MCP Server** node. All three were run end to end against a loopthink stage
 environment before being exported.
 
 They share one shape:

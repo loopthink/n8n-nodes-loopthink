@@ -5,14 +5,17 @@ import type {
 	INodeTypeDescription,
 } from 'n8n-workflow';
 
+import { executeMcp, mcpFields } from './mcp.operation';
 import { executeResult, resultFields } from './result.operation';
 
 /**
  * loopthink — what a workflow does with a claimed tool call.
  *
- * One operation, and it earns its place: masking runs with the rules that
- * arrived alongside the request, and answering is the only way out, so an
- * unmasked result is not something a workflow can send by forgetting a step.
+ * Two operations. Send Result answers a call the workflow handled: masking runs
+ * with the rules that arrived alongside the request, and answering is the only
+ * way out, so an unmasked result is not something a workflow can send by
+ * forgetting a step. Call MCP Server forwards a call to an MCP server only this
+ * network can reach and answers it the same way, in one node.
  *
  * Three others were here and are gone, each once the platform or a standard node
  * turned out to do the job. One built index pages. One filled the Data Table
@@ -41,7 +44,24 @@ export class Loopthink implements INodeType {
 				name: 'loopthinkRunnerApi',
 				required: true,
 				displayName: 'Authentication',
-				displayOptions: { show: { operation: ['result'] } },
+				displayOptions: { show: { operation: ['result', 'mcp'] } },
+			},
+			// The MCP server's own credential, in n8n's generic shapes, so it is
+			// held where every other credential this runner uses is held. The
+			// names are n8n's, not ours to suffix.
+			{
+				// eslint-disable-next-line n8n-nodes-base/node-class-description-credentials-name-unsuffixed
+				name: 'httpHeaderAuth',
+				required: true,
+				displayName: 'MCP Server Credential',
+				displayOptions: { show: { operation: ['mcp'], authentication: ['headerAuth'] } },
+			},
+			{
+				// eslint-disable-next-line n8n-nodes-base/node-class-description-credentials-name-unsuffixed
+				name: 'httpBearerAuth',
+				required: true,
+				displayName: 'MCP Server Credential',
+				displayOptions: { show: { operation: ['mcp'], authentication: ['bearerAuth'] } },
 			},
 		],
 		properties: [
@@ -52,6 +72,12 @@ export class Loopthink implements INodeType {
 				noDataExpression: true,
 				default: 'result',
 				options: [
+					{
+						name: 'Call MCP Server',
+						value: 'mcp',
+						description: 'Forward the call to an MCP server in this network, mask the result and send it back',
+						action: 'Call an MCP server and send the result back',
+					},
 					{
 						name: 'Send Result',
 						value: 'result',
@@ -64,10 +90,16 @@ export class Loopthink implements INodeType {
 				...field,
 				displayOptions: { ...field.displayOptions, show: { ...field.displayOptions?.show, operation: ['result'] } },
 			})),
+			...mcpFields.map((field) => ({
+				...field,
+				displayOptions: { ...field.displayOptions, show: { ...field.displayOptions?.show, operation: ['mcp'] } },
+			})),
 		],
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+		const operation = this.getNodeParameter('operation', 0) as string;
+		if (operation === 'mcp') return executeMcp.call(this);
 		return executeResult.call(this);
 	}
 }
