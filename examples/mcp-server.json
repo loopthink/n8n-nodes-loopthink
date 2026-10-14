@@ -23,7 +23,7 @@
         "operation": "mcp",
         "request": "={{ $('loopthink Runner').first().json }}",
         "serverUrl": "<MCP_SERVER_URL>",
-        "authentication": "none"
+        "serverAuthentication": "none"
       },
       "id": "call-mcp-server",
       "name": "Call MCP Server",

@@ -43,7 +43,11 @@ export class Loopthink implements INodeType {
 			{
 				name: 'loopthinkRunnerApi',
 				required: true,
-				displayName: 'Authentication',
+				// Named for what it is, not "Authentication": the answer travels back
+				// through the queue this credential names, which is why every
+				// operation needs it, and a second "Authentication" below it (the MCP
+				// server's) read as a duplicate.
+				displayName: 'loopthink Runner',
 				displayOptions: { show: { operation: ['result', 'mcp'] } },
 			},
 			// The MCP server's own credential, in n8n's generic shapes, so it is
@@ -54,14 +58,14 @@ export class Loopthink implements INodeType {
 				name: 'httpHeaderAuth',
 				required: true,
 				displayName: 'MCP Server Credential',
-				displayOptions: { show: { operation: ['mcp'], authentication: ['headerAuth'] } },
+				displayOptions: { show: { operation: ['mcp'], serverAuthentication: ['headerAuth'] } },
 			},
 			{
 				// eslint-disable-next-line n8n-nodes-base/node-class-description-credentials-name-unsuffixed
 				name: 'httpBearerAuth',
 				required: true,
 				displayName: 'MCP Server Credential',
-				displayOptions: { show: { operation: ['mcp'], authentication: ['bearerAuth'] } },
+				displayOptions: { show: { operation: ['mcp'], serverAuthentication: ['bearerAuth'] } },
 			},
 		],
 		properties: [

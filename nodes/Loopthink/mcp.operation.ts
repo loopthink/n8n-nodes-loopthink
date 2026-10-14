@@ -55,8 +55,8 @@ export const mcpFields: INodeProperties[] = [
 			'The MCP endpoint (Streamable HTTP) inside your network. It is never sent to loopthink; the platform only ever sees the tools it answers with.',
 	},
 	{
-		displayName: 'Authentication',
-		name: 'authentication',
+		displayName: 'MCP Server Authentication',
+		name: 'serverAuthentication',
 		type: 'options',
 		default: 'none',
 		options: [
@@ -64,7 +64,8 @@ export const mcpFields: INodeProperties[] = [
 			{ name: 'Header Auth', value: 'headerAuth', description: 'A named header, e.g. X-API-Key' },
 			{ name: 'Bearer Token', value: 'bearerAuth', description: 'Sent as Authorization: Bearer …' },
 		],
-		description: 'How the MCP server is authenticated. The credential stays in n8n.',
+		description:
+			'How the MCP server itself is authenticated; the credential stays in n8n. The loopthink Runner credential above is separate: it is what the answer travels back through.',
 	},
 	{
 		displayName:
@@ -266,7 +267,7 @@ class McpClient {
 }
 
 async function authHeaders(ctx: IExecuteFunctions): Promise<Record<string, string>> {
-	const mode = ctx.getNodeParameter('authentication', 0) as string;
+	const mode = ctx.getNodeParameter('serverAuthentication', 0) as string;
 	if (mode === 'headerAuth') {
 		const credential = await ctx.getCredentials('httpHeaderAuth');
 		const name = String(credential.name ?? '').trim();

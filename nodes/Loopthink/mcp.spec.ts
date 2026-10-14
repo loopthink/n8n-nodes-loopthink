@@ -35,7 +35,7 @@ function context(options: {
 	const params: Record<string, any> = {
 		request: options.request,
 		serverUrl: options.serverUrl ?? 'http://mcp.internal/mcp',
-		authentication: options.authentication ?? 'none',
+		serverAuthentication: options.authentication ?? 'none',
 	};
 
 	const ctx = {
