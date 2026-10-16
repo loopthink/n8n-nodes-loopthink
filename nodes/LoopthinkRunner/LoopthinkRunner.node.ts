@@ -38,8 +38,9 @@ export class LoopthinkRunner implements INodeType {
 		// SVG, not the PNG: n8n rendered the SVG here and not the PNG, so the mark
 		// is wrapped in one rather than fighting the icon route.
 		// Distinct filename on purpose: the icon URL is the cache key, so reusing
-		// loopthink.svg served the browser's copy of an older mark forever.
-		icon: 'file:loopthink-mark.svg',
+		// loopthink.svg served the browser's copy of an older mark forever; the
+		// square wordmark replaced the infinity mark in 0.18.2 under a new name.
+		icon: 'file:loopthink-square.svg',
 		group: ['trigger'],
 		version: 1,
 		description: 'Claims loopthink MCP tool calls and executes the HTTP ones inside your network',

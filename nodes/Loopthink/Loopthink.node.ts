@@ -31,7 +31,7 @@ export class Loopthink implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'loopthink',
 		name: 'loopthink',
-		icon: 'file:loopthink-mark.svg',
+		icon: 'file:loopthink-square.svg',
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
